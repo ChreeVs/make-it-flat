@@ -234,7 +234,7 @@ func _process(delta: float) -> void:
 			var pct: int = clampi(int((_reset_hold_timer / RESET_HOLD_DURATION) * 100.0), 0, 100)
 			notification_label.visible = true
 			notification_label.modulate = Color(1.0, 0.72, 0.25, 1.0)
-			notification_label.text = "Tieni premuto [R] per ricostruire il Grattacielo... %d%%" % pct
+			notification_label.text = "Tieni premuto [R] per ricostruire il cantiere... %d%%" % pct
 			if _reset_hold_timer >= RESET_HOLD_DURATION:
 				_reset_triggered = true
 				_reset_hold_timer = 0.0
@@ -355,7 +355,8 @@ func _on_contract_threshold_reached(contract: ContractData) -> void:
 	current_completion_available = true
 	completion_banner.visible = true
 	var final_bonus: float = EconomyManager.get_contract_bonus(contract) if contract else 16000.0
-	completion_label.text = "GRATTACIELO ABBATTIUTO! Premi [E] per Incassare %s (o demolisci fino al 100%%)" % _format_euros(final_bonus)
+	var what: String = "GRATTACIELO ABBATTUTO" if (not contract or contract.contract_id == &"tier5_skyscraper") else "%s ABBATTUTO" % contract.title.to_upper()
+	completion_label.text = "%s! Premi [E] per Incassare %s (o demolisci fino al 100%%)" % [what, _format_euros(final_bonus)]
 
 func _on_contract_completed(_contract: ContractData) -> void:
 	completion_banner.visible = false

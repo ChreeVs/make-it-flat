@@ -4,6 +4,3 @@
 
 [node name="Garage_Structure" type="Node3D"]
 script = ExtResource("1_garage")
-garage_width = 6
-garage_depth = 6
-garage_height = 4

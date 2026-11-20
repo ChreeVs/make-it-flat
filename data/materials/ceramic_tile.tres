@@ -1,8 +1,10 @@
-[gd_resource type="Resource" script_class="MaterialData" load_steps=4 format=3]
+[gd_resource type="Resource" script_class="MaterialData" load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/resources/MaterialData.gd" id="1_script"]
-[ext_resource type="Texture2D" path="res://assets/textures/tex_mat_ceramic.png" id="2_albedo"]
-[ext_resource type="Texture2D" path="res://assets/textures/tex_mat_ceramic_n.png" id="3_normal"]
+[ext_resource type="Texture2D" path="res://assets/polyhaven/textures/floor_tiles_06/floor_tiles_06_diff_1k.jpg" id="2_diff"]
+[ext_resource type="Texture2D" path="res://assets/polyhaven/textures/floor_tiles_06/floor_tiles_06_nor_gl_1k.jpg" id="3_nor_gl"]
+[ext_resource type="Texture2D" path="res://assets/polyhaven/textures/floor_tiles_06/floor_tiles_06_rough_1k.jpg" id="4_rough"]
+[ext_resource type="Texture2D" path="res://assets/polyhaven/textures/floor_tiles_06/floor_tiles_06_ao_1k.jpg" id="5_ao"]
 
 [resource]
 script = ExtResource("1_script")
@@ -13,10 +15,14 @@ max_hp = 60.0
 mass_kg = 28.0
 base_money_value = 42.0
 is_composite = false
-color = Color(0.96, 0.98, 1.0, 1.0)
+color = Color(1, 1, 1, 1.0)
 dust_color = Color(0.86, 0.92, 0.96, 1.0)
-albedo_texture = ExtResource("2_albedo")
-normal_texture = ExtResource("3_normal")
+albedo_texture = ExtResource("2_diff")
+normal_texture = ExtResource("3_nor_gl")
+roughness_texture = ExtResource("4_rough")
+ao_texture = ExtResource("5_ao")
 roughness = 0.22
 metallic = 0.05
-uv_scale = Vector3(1.0, 1.0, 1.0)
+texture_world_size = 1.4
+grime_amount = 0.1
+uv_scale = Vector3(1, 1, 1)

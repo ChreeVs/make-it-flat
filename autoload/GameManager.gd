@@ -16,6 +16,7 @@ var is_contract_menu_open: bool = false
 var contract_bonus_claimed: bool = false
 
 var placed_explosives: Array[Node3D] = []
+var _load_token: int = 0
 
 func _ready() -> void:
 	EventBus.contract_selected.connect(_on_contract_selected)
@@ -49,8 +50,13 @@ func _input(event: InputEvent) -> void:
 	if is_main_menu_open or is_pause_menu_open or is_intro_open or is_settings_open:
 		return
 
-	if event.is_action_pressed("toggle_skills") or event.is_action_pressed("toggle_shop"):
-		_toggle_upgrade_hub()
+	if event.is_action_pressed("toggle_skills"):
+		_toggle_menu("SkillTreeMenu", "open_menu", "close_menu")
+		get_viewport().set_input_as_handled()
+		return
+
+	if event.is_action_pressed("toggle_shop"):
+		_toggle_menu("ShopMenu", "open_shop", "close_shop")
 		get_viewport().set_input_as_handled()
 		return
 
@@ -63,14 +69,14 @@ func _input(event: InputEvent) -> void:
 				cm.open_menu()
 			get_viewport().set_input_as_handled()
 
-func _toggle_upgrade_hub() -> void:
-	var st := get_tree().get_root().find_child("SkillTreeMenu", true, false)
-	if not st:
+func _toggle_menu(node_name: String, open_method: String, close_method: String) -> void:
+	var menu := get_tree().get_root().find_child(node_name, true, false)
+	if not menu:
 		return
-	if st.visible and st.has_method("close_menu"):
-		st.close_menu()
-	elif st.has_method("open_menu"):
-		st.open_menu()
+	if menu.visible and menu.has_method(close_method):
+		menu.call(close_method)
+	elif menu.has_method(open_method):
+		menu.call(open_method)
 
 func _handle_escape_key() -> void:
 	if is_main_menu_open:
@@ -135,6 +141,10 @@ func load_skyscraper_for_difficulty() -> void:
 func load_contract(contract: ContractData) -> void:
 	if not contract:
 		return
+	# Token di caricamento: se arriva una nuova richiesta mentre questa attende il frame,
+	# la vecchia si annulla (evita due strutture sovrapposte con click ravvicinati).
+	_load_token += 1
+	var my_token: int = _load_token
 	current_contract = contract
 	contract_bonus_claimed = false
 	clear_explosives()
@@ -143,6 +153,8 @@ func load_contract(contract: ContractData) -> void:
 		current_structure.queue_free()
 		current_structure = null
 		await get_tree().process_frame
+		if my_token != _load_token:
+			return
 
 	if not is_instance_valid(structure_container):
 		var root := get_tree().current_scene
@@ -165,11 +177,11 @@ func load_contract(contract: ContractData) -> void:
 		current_structure = inst
 		_reposition_player_safely()
 		if not is_main_menu_open:
-			var d_lbl: String = String(EconomyManager.get_difficulty_config().get("label", "FACILE"))
-			EventBus.show_notification.emit(
-				"Grattacielo pronto [%s — %d Piani Arredati]!" % [d_lbl, EconomyManager.get_target_skyscraper_floors()],
-				Color(0.96, 0.78, 0.24)
-			)
+			var msg: String = "Cantiere pronto: %s" % contract.title
+			if contract.contract_id == &"tier5_skyscraper":
+				var d_lbl: String = String(EconomyManager.get_difficulty_config().get("label", "FACILE"))
+				msg = "Grattacielo pronto [%s — %d Piani Arredati]!" % [d_lbl, EconomyManager.get_target_skyscraper_floors()]
+			EventBus.show_notification.emit(msg, Color(0.96, 0.78, 0.24))
 
 func _reposition_player_safely() -> void:
 	var player := get_tree().get_first_node_in_group("player") as CharacterBody3D
@@ -206,8 +218,9 @@ func complete_current_contract() -> void:
 	if current_contract.tier >= EconomyManager.unlocked_tier and current_contract.tier < 5:
 		EconomyManager.unlock_tier(current_contract.tier + 1)
 
+	var done_title: String = "GRATTACIELO" if current_contract.contract_id == &"tier5_skyscraper" else current_contract.title.to_upper()
 	EventBus.show_notification.emit(
-		"GRATTACIELO RASO AL SUOLO! Premio Finale: +€%d" % int(bonus),
+		"%s RASO AL SUOLO! Premio Finale: +€%d" % [done_title, int(bonus)],
 		Color(0.30, 0.95, 0.48)
 	)
 	SaveManager.save_game()
@@ -218,6 +231,12 @@ func register_explosive(charge: Node3D) -> void:
 	if is_instance_valid(charge) and not placed_explosives.has(charge):
 		placed_explosives.append(charge)
 	EventBus.explosives_count_changed.emit(placed_explosives.size())
+
+func unregister_explosive(charge: Node3D) -> void:
+	if placed_explosives.has(charge):
+		placed_explosives.erase(charge)
+		_prune_explosives()
+		EventBus.explosives_count_changed.emit(placed_explosives.size())
 
 func get_active_explosives_count() -> int:
 	_prune_explosives()

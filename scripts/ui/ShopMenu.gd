@@ -161,7 +161,9 @@ func _build_tools_list() -> void:
 		vbox.add_child(name_lbl)
 
 		var desc_lbl := Label.new()
-		desc_lbl.text = ("950 DMG • T4 • €%d/carica" % c4_unit) if t_id == &"c4_charge" else String(t_def["desc"])
+		var c4_td: ToolData = EconomyManager.get_tool_data(&"c4_charge")
+		var c4_dmg: int = int((c4_td.base_damage if c4_td else 900.0) * EconomyManager.get_c4_damage_multiplier())
+		desc_lbl.text = ("%d DMG • T4 • €%d/carica" % [c4_dmg, c4_unit]) if t_id == &"c4_charge" else String(t_def["desc"])
 		desc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		desc_lbl.add_theme_color_override("font_color", Color(1.0, 0.64, 0.34) if t_id == &"c4_charge" else Color(0.72, 0.76, 0.82))
 		desc_lbl.add_theme_font_size_override("font_size", 11)

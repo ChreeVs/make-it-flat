@@ -1,87 +1,11 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene format=3]
 
-[ext_resource type="Texture2D" path="res://assets/textures/tex_hazard_stripes.png" id="1_hazard"]
-[ext_resource type="Texture2D" path="res://assets/textures/tex_dark_steel.png" id="2_steel"]
+[ext_resource type="PackedScene" path="res://assets/polyhaven/models/sledgehammer_01/sledgehammer_01_1k.gltf" id="1_vgrsx"]
 
-[sub_resource type="StandardMaterial3D" id="Mat_Shaft"]
-albedo_color = Color(0.13, 0.14, 0.16, 1)
-roughness = 0.78
+[node name="Sledgehammer8kgModel" type="Node3D" unique_id=233043166]
 
-[sub_resource type="StandardMaterial3D" id="Mat_Steel"]
-albedo_texture = ExtResource("2_steel")
-metallic = 0.94
-roughness = 0.26
+[node name="Tilt" type="Node3D" parent="." unique_id=1445624398]
+transform = Transform3D(1, 0, 0, 0, 0.81915206, 0.57357645, 0, -0.57357645, 0.81915206, -0.02, -0.07, -0.16)
 
-[sub_resource type="StandardMaterial3D" id="Mat_Hazard"]
-albedo_texture = ExtResource("1_hazard")
-roughness = 0.44
-uv1_scale = Vector3(2, 2, 1)
-
-[sub_resource type="CylinderMesh" id="Mesh_Shaft"]
-top_radius = 0.026
-bottom_radius = 0.030
-height = 0.78
-radial_segments = 12
-
-[sub_resource type="CylinderMesh" id="Mesh_Band"]
-top_radius = 0.032
-bottom_radius = 0.032
-height = 0.14
-radial_segments = 12
-
-[sub_resource type="CylinderMesh" id="Mesh_Collar"]
-top_radius = 0.040
-bottom_radius = 0.032
-height = 0.08
-radial_segments = 12
-
-[sub_resource type="CylinderMesh" id="Mesh_Head"]
-top_radius = 0.075
-bottom_radius = 0.075
-height = 0.25
-radial_segments = 8
-
-[sub_resource type="BoxMesh" id="Mesh_SidePlate"]
-size = Vector3(0.158, 0.095, 0.115)
-
-[sub_resource type="CylinderMesh" id="Mesh_StrikeCap"]
-top_radius = 0.060
-bottom_radius = 0.074
-height = 0.028
-radial_segments = 8
-
-[node name="Sledgehammer8kgModel" type="Node3D"]
-
-[node name="Shaft" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.788011, 0.615661, 0, -0.615661, 0.788011, 0, -0.09, -0.20)
-mesh = SubResource("Mesh_Shaft")
-surface_material_override/0 = SubResource("Mat_Shaft")
-
-[node name="HazardGripBand" type="MeshInstance3D" parent="Shaft"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.10, 0)
-mesh = SubResource("Mesh_Band")
-surface_material_override/0 = SubResource("Mat_Hazard")
-
-[node name="SteelCollar" type="MeshInstance3D" parent="Shaft"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.32, 0)
-mesh = SubResource("Mesh_Collar")
-surface_material_override/0 = SubResource("Mat_Steel")
-
-[node name="SledgeHead" type="MeshInstance3D" parent="Shaft"]
-transform = Transform3D(1, 0, 0, 0, -4.37114e-08, -1, 0, 1, -4.37114e-08, 0, 0.39, 0)
-mesh = SubResource("Mesh_Head")
-surface_material_override/0 = SubResource("Mat_Steel")
-
-[node name="HazardReinforcementPlate" type="MeshInstance3D" parent="Shaft/SledgeHead"]
-mesh = SubResource("Mesh_SidePlate")
-surface_material_override/0 = SubResource("Mat_Hazard")
-
-[node name="FrontStrikeCap" type="MeshInstance3D" parent="Shaft/SledgeHead"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.139, 0)
-mesh = SubResource("Mesh_StrikeCap")
-surface_material_override/0 = SubResource("Mat_Steel")
-
-[node name="BackStrikeCap" type="MeshInstance3D" parent="Shaft/SledgeHead"]
-transform = Transform3D(1, 0, 0, 0, -1, 0, 0, 0, -1, 0, -0.139, 0)
-mesh = SubResource("Mesh_StrikeCap")
-surface_material_override/0 = SubResource("Mat_Steel")
+[node name="Model" type="Node3D" parent="Tilt" unique_id=1507387649 instance=ExtResource("1_vgrsx")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0, 0.22, 0)

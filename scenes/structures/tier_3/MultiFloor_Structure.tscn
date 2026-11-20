@@ -4,7 +4,3 @@
 
 [node name="MultiFloor_Structure" type="Node3D"]
 script = ExtResource("1_multifloor")
-building_width = 6
-building_depth = 4
-num_floors = 3
-floor_height = 3

@@ -418,7 +418,7 @@ func _apply_aoe_damage(center: Vector3, exclude_block: DestructibleBlock, aoe_dm
 	if not is_instance_valid(sm):
 		return false
 
-	var snapshot: Array[DestructibleBlock] = sm.active_intact_blocks.duplicate()
+	var snapshot: Array[DestructibleBlock] = sm.get_intact_blocks_in_radius(center, radius)
 	for b in snapshot:
 		if not is_instance_valid(b) or b.is_destroyed or b == exclude_block:
 			continue
@@ -454,11 +454,16 @@ func _try_place_c4() -> void:
 		return
 
 	var c4 := c4_scene.instantiate() as Node3D
-	block.add_child(c4)
+	# La carica vive nel contenitore delle strutture (non dentro il blocco), così non sparisce
+	# se il blocco viene distrutto prima della detonazione.
+	var holder: Node = GameManager.structure_container if is_instance_valid(GameManager.structure_container) else get_tree().current_scene
+	holder.add_child(c4)
 	c4.global_position = hit_pos + hit_normal * 0.08
 
 	var up_ref: Vector3 = Vector3.RIGHT if absf(hit_normal.dot(Vector3.UP)) > 0.95 else Vector3.UP
 	c4.look_at(c4.global_position + hit_normal, up_ref)
+	if c4.has_method("attach_to_block"):
+		c4.attach_to_block(block)
 
 	GameManager.register_explosive(c4)
 	_play_button_press_animation()
@@ -515,6 +520,12 @@ func _on_explosion_shake(world_pos: Vector3, radius: float) -> void:
 
 func _on_collapse_shake(count: int, _mass: float) -> void:
 	_add_shake(clampf(0.02 + float(count) * 0.0022, 0.025, 0.10))
+
+func _exit_tree() -> void:
+	# Se il Player viene liberato durante un hitstop, il tempo di gioco non deve restare rallentato
+	if _hitstop_active:
+		Engine.time_scale = 1.0
+		_hitstop_active = false
 
 func _trigger_hitstop(duration_sec: float) -> void:
 	if _hitstop_active:

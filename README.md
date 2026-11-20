@@ -39,12 +39,18 @@ Il giocatore veste i panni di un operaio edile specializzato in demolizioni: par
 | `W`, `A`, `S`, `D` | Movimento |
 | `Shift` | Corsa |
 | `Spazio` | Salto |
+| `C` / `Ctrl` | Accovacciati |
 | `Mouse Sinistro (LMB)` | Colpo / Piazzamento Carica C4 / Innesco Detonatore |
-| `B` | Menu Officina / Shop Potenziamenti e Prestigio |
-| `C` | Menu Commesse (Selezione Cantiere da Tier 1 a Tier 5) |
-| `E` | Completa Cantiere e Incassa Bonus (attivo all'88% di demolizione) |
-| `R` | Reset / Ricostruzione Cantiere |
-| `Tab` / `Esc` | Rilascia o cattura il puntatore del mouse |
+| `Mouse Destro (RMB)` | Colpo Pesante (1.65x) / Detona subito i C4 |
+| `1`–`7` / Rotellina | Cambia strumento |
+| `Q` | Torna allo strumento precedente |
+| `F` | Detona tutte le cariche C4 |
+| `K` / `Tab` | Albero delle Abilità |
+| `B` | Officina: Arsenale e Prestigio |
+| `N` | Menu Commesse (Selezione Cantiere da Tier 1 a Tier 5) |
+| `E` | Incassa il premio del cantiere (attivo dall'88% di demolizione; al 100% è automatico) |
+| `R` (tieni premuto) | Ricostruzione Cantiere |
+| `Esc` | Pausa / chiudi menu |
 
 ---
 
@@ -64,8 +70,7 @@ res://
 ├── data/
 │   ├── contracts/             # Risorse ContractData (Tier 1 -> Tier 5)
 │   ├── materials/             # Risorse MaterialData (legno, mattoni, calcestruzzo armato)
-│   ├── tools/                 # Risorse ToolData
-│   └── upgrades/              # Risorse UpgradeData
+│   └── tools/                 # Risorse ToolData
 ├── scenes/
 │   ├── MainGame.tscn          # Scena di gioco principale
 │   ├── player/Player.tscn     # Controller FPS
@@ -80,3 +85,24 @@ res://
 ## 🚀 Requisiti
 
 * **Godot Engine 4.7+** (con supporto Godot Jolt Physics abilitato).
+* **Renderer Forward+** (Direct3D 12 / Vulkan): SSAO, SSIL, riflessi SSR, nebbia volumetrica, cielo HDR.
+  La qualità grafica si regola in *Impostazioni → Qualità Grafica* (Bassa / Media / Alta).
+
+---
+
+## 🎨 Grafica & Asset
+
+* **Shader strutture** (`assets/shaders/structure_pbr.gdshader`): texture PBR proiettate in coordinate mondo,
+  così muri e pilastri formati da più blocchi appaiono come superfici continue; crepe procedurali che crescono
+  con il danno; sporco e variazione cromatica anti-ripetizione.
+* **Asset Poly Haven (CC0)** in `assets/polyhaven/`: texture PBR, cielo HDRI, arredi, attrezzi e oggetti di cantiere.
+  Licenza pubblico dominio, vedi `assets/polyhaven/LICENSE.md`.
+* Le scene degli attrezzi in prima persona si rigenerano con:
+  `Godot --headless --path . --script res://scripts/tools/BuildToolModels.gd`
+* Foto e misure di prestazioni del gioco:
+  `Godot --path . res://scenes/tools/ScreenshotCapture.tscn -- --test-mode --out=<cartella> [--difficulty=hardcore] [--measure=120]`
+
+## 🧪 Test
+
+Le scene `scenes/TestRunner_Sprint2..8.tscn` usano un salvataggio separato (`user://test_save_v1.json`)
+e non toccano mai la carriera del giocatore.
