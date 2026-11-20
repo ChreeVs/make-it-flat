@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="MaterialData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/MaterialData.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/textures/tex_dark_steel.png" id="2_albedo"]
+
+[resource]
+script = ExtResource("1_script")
+material_id = &"steel_beam"
+display_name = "Trave in Acciaio"
+hardness_tier = 4
+max_hp = 850.0
+mass_kg = 140.0
+base_money_value = 220.0
+is_composite = false
+color = Color(0.35, 0.38, 0.42, 1.0)
+dust_color = Color(0.45, 0.45, 0.5, 1.0)
+albedo_texture = ExtResource("2_albedo")
+roughness = 0.35
+metallic = 0.92
+uv_scale = Vector3(1.0, 1.0, 1.0)
