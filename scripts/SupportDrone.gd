@@ -9,6 +9,9 @@ var _angle: float = 0.0
 var _fire_timer: float = 0.0
 var _laser_show_timer: float = 0.0
 var _laser_mat: StandardMaterial3D = null
+var _height_refresh_timer: float = 0.0
+var _target_orbit_y: float = 7.5
+var _current_orbit_y: float = 7.5
 
 @onready var drone_body: Node3D = $DroneBody
 @onready var laser_beam: MeshInstance3D = $LaserBeam
@@ -43,8 +46,14 @@ func _physics_process(delta: float) -> void:
 		visible = true
 
 	_angle += orbit_speed * delta
-	var center: Vector3 = Vector3(0.0, orbit_height, 0.0)
 	var sm := GameManager.current_structure as StructureManager
+	# Quota orbitale: si mantiene sopra il punto più alto ancora in piedi (torri fino a 8 piani)
+	_height_refresh_timer -= delta
+	if _height_refresh_timer <= 0.0:
+		_height_refresh_timer = 0.5
+		_target_orbit_y = maxf(orbit_height, _get_top_intact_y(sm) + 3.5)
+	_current_orbit_y = lerpf(_current_orbit_y, _target_orbit_y, minf(1.5 * delta, 1.0))
+	var center: Vector3 = Vector3(0.0, _current_orbit_y, 0.0)
 	if is_instance_valid(sm):
 		center.x = sm.global_position.x
 		center.z = sm.global_position.z
@@ -67,6 +76,10 @@ func _physics_process(delta: float) -> void:
 		if _laser_show_timer <= 0.0 and is_instance_valid(laser_beam):
 			laser_beam.visible = false
 
+	# Niente demolizione automatica (e guadagni) mentre si è nel menu principale, in pausa o nel tutorial
+	if GameManager.is_main_menu_open or GameManager.is_pause_menu_open or GameManager.is_intro_open:
+		return
+
 	_fire_timer -= delta
 	if _fire_timer <= 0.0:
 		var cooldown: float = maxf(1.25 - float(lvl) * 0.11, 0.30)
@@ -78,14 +91,14 @@ func _fire_at_structure(lvl: int) -> void:
 	if not is_instance_valid(sm) or sm.active_intact_blocks.is_empty():
 		return
 
-	# Scegli un blocco intatto valido dalla lista indicizzata O(1)
+	# Bombarda i blocchi residui più alti: campiona alcuni candidati e sceglie quello a quota maggiore
 	var target: DestructibleBlock = null
 	var count: int = sm.active_intact_blocks.size()
-	for _attempt in range(5):
+	for _attempt in range(12):
 		var candidate: DestructibleBlock = sm.active_intact_blocks[randi() % count]
-		if is_instance_valid(candidate) and not candidate.is_destroyed:
-			target = candidate
-			break
+		if is_instance_valid(candidate) and not candidate.is_destroyed and candidate.freeze:
+			if target == null or candidate.global_position.y > target.global_position.y:
+				target = candidate
 	if not target:
 		return
 
@@ -96,6 +109,20 @@ func _fire_at_structure(lvl: int) -> void:
 	var target_pos: Vector3 = target.global_position
 	_show_laser(global_position + Vector3(0.0, -0.22, 0.0), target_pos)
 	target.take_damage(drone_dmg, drone_pen, target_pos, Vector3.UP)
+
+func _get_top_intact_y(sm: StructureManager) -> float:
+	if not is_instance_valid(sm) or sm.active_intact_blocks.is_empty():
+		return 0.0
+	var top: float = 0.0
+	var count: int = sm.active_intact_blocks.size()
+	var step: int = maxi(int(float(count) / 64.0), 1)
+	var i: int = 0
+	while i < count:
+		var b: DestructibleBlock = sm.active_intact_blocks[i]
+		if is_instance_valid(b) and not b.is_destroyed:
+			top = maxf(top, b.global_position.y)
+		i += step
+	return top
 
 func _show_laser(from_pos: Vector3, to_pos: Vector3) -> void:
 	if not is_instance_valid(laser_beam):

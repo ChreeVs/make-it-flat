@@ -53,23 +53,40 @@ enum BlockShape {
 var max_hp: float = 100.0
 var current_hp: float = 100.0
 var is_destroyed: bool = false
-var _crack_stage: int = 0
 var _xray_enabled: bool = false
-var _instance_material: StandardMaterial3D = null
-var _visual_meshes: Array[MeshInstance3D] = []
+var _damage_level: float = 0.0
+
+# Tutta la parte visiva vive sotto _visual_root (scalata dal "jolt" d'impatto).
+var _visual_root: Node3D = null
+var _visual_meshes: Array[GeometryInstance3D] = []   # tutte le geometrie (X-Ray, ombre)
+var _shader_meshes: Array[GeometryInstance3D] = []   # geometrie con lo shader strutturale (crepe/flash)
+var _jolt_tween: Tween = null
 
 @onready var mesh_instance: MeshInstance3D = $MeshInstance3D
 @onready var collision_shape: CollisionShape3D = $CollisionShape3D
 
-# Risorse statiche condivise + budget VFX per frame (zero lag durante esplosioni C4)
-static var _base_material_cache: Dictionary = {}
+const MODEL_DIR: String = "res://assets/polyhaven/models/%s/%s_1k.gltf"
+const FURNITURE_VIS_RANGE: float = 55.0
+## Gli arredi sono dentro l'edificio (già in ombra): non proiettano ombre per risparmiare draw call
+static var furniture_shadows: bool = false
+
+# Risorse statiche condivise (mesh, materiali, modelli) + budget VFX per frame
+static var _structure_shader: Shader = null
+static var _structure_material_cache: Dictionary = {} # material_id -> ShaderMaterial
 static var _accent_materials: Dictionary = {}
-static var _crack_materials: Array[StandardMaterial3D] = []
 static var _xray_material: ShaderMaterial = null
 static var _glass_material: StandardMaterial3D = null
+static var _frame_material: StandardMaterial3D = null
 static var _roof_material: StandardMaterial3D = null
-static var _shard_mesh: BoxMesh = null
-static var _particle_mesh: BoxMesh = null
+static var _box_cache: Dictionary = {}
+static var _rbox_cache: Dictionary = {}
+static var _cyl_cache: Dictionary = {}
+static var _model_cache: Dictionary = {} # path -> {"scene": PackedScene, "aabb": AABB}
+static var _rock_meshes: Array[ArrayMesh] = []
+static var _dust_materials: Dictionary = {}
+static var _dust_quad: QuadMesh = null
+static var _dust_curve: Curve = null
+static var _dust_ramp: Gradient = null
 static var _last_fx_frame: int = -1
 static var _frame_particle_count: int = 0
 static var _frame_shard_count: int = 0
@@ -81,23 +98,12 @@ func _ready() -> void:
 	_apply_material_properties()
 	_build_architectural_geometry()
 
+# ---------------------------------------------------------------------------------------------
+# RISORSE CONDIVISE
+# ---------------------------------------------------------------------------------------------
 static func _ensure_shared_resources() -> void:
-	if _crack_materials.is_empty():
-		var paths := [
-			"res://assets/textures/tex_cracks_stage1.png",
-			"res://assets/textures/tex_cracks_stage2.png",
-			"res://assets/textures/tex_cracks_stage3.png"
-		]
-		for p in paths:
-			var cm := StandardMaterial3D.new()
-			cm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-			cm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-			cm.albedo_color = Color(1.0, 1.0, 1.0, 0.92)
-			cm.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
-			cm.uv1_triplanar = true
-			if ResourceLoader.exists(p):
-				cm.albedo_texture = load(p)
-			_crack_materials.append(cm)
+	if _structure_shader == null:
+		_structure_shader = load("res://assets/shaders/structure_pbr.gdshader")
 
 	if _xray_material == null:
 		var sh_path := "res://assets/shaders/block_xray_outline.gdshader"
@@ -108,48 +114,65 @@ static func _ensure_shared_resources() -> void:
 	if _glass_material == null:
 		_glass_material = StandardMaterial3D.new()
 		_glass_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		_glass_material.albedo_color = Color(0.84, 0.95, 1.0, 0.72)
-		_glass_material.roughness = 0.10
-		_glass_material.metallic = 0.32
-		if ResourceLoader.exists("res://assets/textures/tex_mat_curtain_glass.png"):
-			_glass_material.albedo_texture = load("res://assets/textures/tex_mat_curtain_glass.png")
-		elif ResourceLoader.exists("res://assets/textures/tex_mat_glass.png"):
-			_glass_material.albedo_texture = load("res://assets/textures/tex_mat_glass.png")
+		_glass_material.albedo_color = Color(0.42, 0.55, 0.62, 0.38)
+		_glass_material.roughness = 0.04
+		_glass_material.metallic = 0.15
+		_glass_material.metallic_specular = 0.9
+		_glass_material.rim_enabled = true
+		_glass_material.rim = 0.35
+		_glass_material.rim_tint = 0.2
+
+	if _frame_material == null:
+		_frame_material = _make_simple_mat(Color(0.13, 0.14, 0.16), 0.38, 0.85)
 
 	if _roof_material == null:
 		_roof_material = StandardMaterial3D.new()
-		_roof_material.albedo_color = Color(0.95, 0.92, 0.88, 1.0)
+		_roof_material.albedo_color = Color(0.92, 0.88, 0.84, 1.0)
 		_roof_material.roughness = 0.84
+		_roof_material.uv1_triplanar = true
+		_roof_material.uv1_scale = Vector3(0.8, 0.8, 0.8)
 		if ResourceLoader.exists("res://assets/textures/tex_roof_tiles.png"):
 			_roof_material.albedo_texture = load("res://assets/textures/tex_roof_tiles.png")
 
 	if _accent_materials.is_empty():
-		_accent_materials["dark_metal"] = _make_simple_mat(Color(0.18, 0.20, 0.24), 0.35, 0.80)
-		_accent_materials["chrome"] = _make_simple_mat(Color(0.84, 0.87, 0.90), 0.16, 0.95)
-		_accent_materials["brass"] = _make_simple_mat(Color(0.86, 0.68, 0.24), 0.25, 0.85)
-		_accent_materials["porcelain"] = _make_simple_mat(Color(0.96, 0.97, 0.99), 0.14, 0.05)
-		_accent_materials["cushion_red"] = _make_simple_mat(Color(0.74, 0.20, 0.20), 0.88, 0.0)
-		_accent_materials["cushion_navy"] = _make_simple_mat(Color(0.18, 0.28, 0.48), 0.88, 0.0)
-		_accent_materials["cushion_cream"] = _make_simple_mat(Color(0.93, 0.91, 0.85), 0.90, 0.0)
-		_accent_materials["foliage"] = _make_simple_mat(Color(0.18, 0.52, 0.22), 0.82, 0.0)
-		_accent_materials["soil"] = _make_simple_mat(Color(0.28, 0.19, 0.12), 0.96, 0.0)
-		_accent_materials["terracotta"] = _make_simple_mat(Color(0.74, 0.38, 0.22), 0.78, 0.0)
-		_accent_materials["screen_on"] = _make_emissive_mat(Color(0.25, 0.68, 0.95), 0.9)
-		_accent_materials["led_green"] = _make_emissive_mat(Color(0.22, 0.96, 0.45), 1.4)
-		_accent_materials["bottle_amber"] = _make_simple_mat(Color(0.86, 0.46, 0.12), 0.15, 0.1)
-		_accent_materials["bottle_green"] = _make_simple_mat(Color(0.18, 0.64, 0.28), 0.15, 0.1)
-		_accent_materials["book_blue"] = _make_simple_mat(Color(0.20, 0.38, 0.74), 0.82, 0.0)
-		_accent_materials["book_gold"] = _make_simple_mat(Color(0.84, 0.62, 0.18), 0.82, 0.0)
-		_accent_materials["mirror"] = _make_simple_mat(Color(0.78, 0.88, 0.95), 0.05, 0.92)
-		_accent_materials["granite"] = _make_simple_mat(Color(0.32, 0.34, 0.38), 0.28, 0.12)
+		_accent_materials["dark_metal"] = _make_simple_mat(Color(0.12, 0.13, 0.15), 0.42, 0.85)
+		_accent_materials["brushed_steel"] = _make_simple_mat(Color(0.72, 0.74, 0.77), 0.30, 0.95)
+		_accent_materials["chrome"] = _make_simple_mat(Color(0.90, 0.91, 0.93), 0.08, 1.0)
+		_accent_materials["brass"] = _make_simple_mat(Color(0.86, 0.66, 0.30), 0.22, 1.0)
+		var porc := _make_simple_mat(Color(0.95, 0.96, 0.97), 0.10, 0.0)
+		porc.clearcoat_enabled = true
+		porc.clearcoat = 0.8
+		porc.clearcoat_roughness = 0.08
+		_accent_materials["porcelain"] = porc
+		_accent_materials["linen"] = _make_simple_mat(Color(0.93, 0.91, 0.86), 0.95, 0.0)
+		_accent_materials["duvet"] = _make_simple_mat(Color(0.24, 0.33, 0.46), 0.92, 0.0)
+		_accent_materials["water"] = _make_simple_mat(Color(0.55, 0.72, 0.80), 0.02, 0.0)
+		_accent_materials["granite"] = _make_simple_mat(Color(0.16, 0.16, 0.17), 0.18, 0.05)
+		_accent_materials["black_glass"] = _make_simple_mat(Color(0.03, 0.03, 0.035), 0.05, 0.2)
+		_accent_materials["led_green"] = _make_emissive_mat(Color(0.22, 0.96, 0.45), 2.5)
+		_accent_materials["led_blue"] = _make_emissive_mat(Color(0.25, 0.55, 1.0), 2.0)
+		_accent_materials["mirror"] = _make_simple_mat(Color(0.86, 0.90, 0.93), 0.02, 1.0)
+		_accent_materials["bottle_amber"] = _make_simple_mat(Color(0.55, 0.26, 0.06), 0.08, 0.0)
+		_accent_materials["bottle_green"] = _make_simple_mat(Color(0.10, 0.30, 0.14), 0.08, 0.0)
+		_accent_materials["vent"] = _make_simple_mat(Color(0.05, 0.05, 0.06), 0.6, 0.6)
 
-	if _shard_mesh == null:
-		_shard_mesh = BoxMesh.new()
-		_shard_mesh.size = Vector3(0.22, 0.22, 0.22)
+	if _rock_meshes.is_empty():
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 1337
+		for i in range(5):
+			_rock_meshes.append(_generate_rock_mesh(rng))
 
-	if _particle_mesh == null:
-		_particle_mesh = BoxMesh.new()
-		_particle_mesh.size = Vector3(0.09, 0.09, 0.09)
+	if _dust_quad == null:
+		_dust_quad = QuadMesh.new()
+		_dust_quad.size = Vector2(0.6, 0.6)
+		_dust_curve = Curve.new()
+		_dust_curve.add_point(Vector2(0.0, 0.35))
+		_dust_curve.add_point(Vector2(0.35, 0.85))
+		_dust_curve.add_point(Vector2(1.0, 1.25))
+		_dust_ramp = Gradient.new()
+		_dust_ramp.set_color(0, Color(1, 1, 1, 0.75))
+		_dust_ramp.set_color(1, Color(1, 1, 1, 0.0))
+		_dust_ramp.add_point(0.25, Color(1, 1, 1, 0.55))
 
 static func _make_simple_mat(col: Color, rough: float, metal: float) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
@@ -167,30 +190,213 @@ static func _make_emissive_mat(col: Color, energy: float) -> StandardMaterial3D:
 	m.roughness = 0.2
 	return m
 
-func _get_or_create_base_material(mat_data: MaterialData) -> StandardMaterial3D:
-	if block_shape == BlockShape.WINDOW_X or block_shape == BlockShape.WINDOW_Z:
-		return _glass_material
-	if block_shape == BlockShape.ROOF_SLOPE_N or block_shape == BlockShape.ROOF_SLOPE_S:
-		return _roof_material
+static func get_structure_material(mat_data: MaterialData) -> ShaderMaterial:
+	_ensure_shared_resources()
+	var key: StringName = mat_data.material_id if mat_data else &"_default"
+	if _structure_material_cache.has(key):
+		return _structure_material_cache[key] as ShaderMaterial
+	var m := ShaderMaterial.new()
+	m.shader = _structure_shader
+	if mat_data:
+		m.set_shader_parameter("albedo_tex", mat_data.albedo_texture)
+		m.set_shader_parameter("normal_tex", mat_data.normal_texture)
+		m.set_shader_parameter("has_normal", mat_data.normal_texture != null)
+		m.set_shader_parameter("rough_tex", mat_data.roughness_texture)
+		m.set_shader_parameter("ao_tex", mat_data.ao_texture)
+		m.set_shader_parameter("tint", mat_data.color)
+		m.set_shader_parameter("world_size", mat_data.texture_world_size)
+		m.set_shader_parameter("roughness_mult", 1.0 if mat_data.roughness_texture else mat_data.roughness)
+		m.set_shader_parameter("metallic_value", mat_data.metallic)
+		m.set_shader_parameter("grime_amount", mat_data.grime_amount)
+	_structure_material_cache[key] = m
+	return m
 
-	var key: StringName = mat_data.material_id
-	if _base_material_cache.has(key):
-		return _base_material_cache[key] as StandardMaterial3D
+# ---------------------------------------------------------------------------------------------
+# MESH CONDIVISE (cache: migliaia di blocchi riusano le stesse mesh invece di crearne copie)
+# ---------------------------------------------------------------------------------------------
+static func _get_box(size: Vector3) -> BoxMesh:
+	var key := "%.3f|%.3f|%.3f" % [size.x, size.y, size.z]
+	if not _box_cache.has(key):
+		var bm := BoxMesh.new()
+		bm.size = size
+		_box_cache[key] = bm
+	return _box_cache[key]
 
-	var std := StandardMaterial3D.new()
-	std.albedo_color = mat_data.color
-	std.roughness = mat_data.roughness
-	std.metallic = mat_data.metallic
-	std.uv1_scale = mat_data.uv_scale
-	if mat_data.albedo_texture:
-		std.albedo_texture = mat_data.albedo_texture
-	if mat_data.normal_texture:
-		std.normal_enabled = true
-		std.normal_texture = mat_data.normal_texture
-		std.normal_scale = 1.15
-	_base_material_cache[key] = std
-	return std
+static func _get_cylinder(radius: float, height: float, top_ratio: float = 1.0) -> CylinderMesh:
+	var key := "%.3f|%.3f|%.2f" % [radius, height, top_ratio]
+	if not _cyl_cache.has(key):
+		var cm := CylinderMesh.new()
+		cm.bottom_radius = radius
+		cm.top_radius = radius * top_ratio
+		cm.height = height
+		cm.radial_segments = 16
+		cm.rings = 1
+		_cyl_cache[key] = cm
+	return _cyl_cache[key]
 
+# Box con spigoli arrotondati (raggio r): niente forme "a cubetti" per sanitari, letti, elettrodomestici
+static func _get_rounded_box(size: Vector3, radius: float) -> ArrayMesh:
+	var key := "%.3f|%.3f|%.3f|%.3f" % [size.x, size.y, size.z, radius]
+	if _rbox_cache.has(key):
+		return _rbox_cache[key]
+	var h: Vector3 = size * 0.5
+	var r: float = minf(radius, minf(h.x, minf(h.y, h.z)) * 0.98)
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var steps: Array[float] = [0.0, 0.18, 0.42, 0.7, 1.0]
+	var faces: Array = [
+		[Vector3.RIGHT, Vector3.BACK, Vector3.UP], [Vector3.LEFT, Vector3.FORWARD, Vector3.UP],
+		[Vector3.UP, Vector3.RIGHT, Vector3.BACK], [Vector3.DOWN, Vector3.RIGHT, Vector3.FORWARD],
+		[Vector3.BACK, Vector3.LEFT, Vector3.UP], [Vector3.FORWARD, Vector3.RIGHT, Vector3.UP]
+	]
+	for f in faces:
+		var nrm: Vector3 = f[0]
+		var u_ax: Vector3 = f[1]
+		var v_ax: Vector3 = f[2]
+		var hu: float = absf(u_ax.dot(h))
+		var hv: float = absf(v_ax.dot(h))
+		var hn: float = absf(nrm.dot(h))
+		var coords_u: Array[float] = _rounded_axis_coords(hu, r, steps)
+		var coords_v: Array[float] = _rounded_axis_coords(hv, r, steps)
+		var grid: Array = []
+		for cv in coords_v:
+			var row: Array[Vector3] = []
+			for cu in coords_u:
+				var p: Vector3 = nrm * hn + u_ax * cu + v_ax * cv
+				var inner := Vector3(clampf(p.x, -h.x + r, h.x - r), clampf(p.y, -h.y + r, h.y - r), clampf(p.z, -h.z + r, h.z - r))
+				var d: Vector3 = p - inner
+				var n: Vector3 = d.normalized() if d.length_squared() > 1e-10 else nrm
+				row.append(inner + n * r)
+			grid.append(row)
+		for j in range(grid.size() - 1):
+			for i in range(coords_u.size() - 1):
+				var a: Vector3 = grid[j][i]
+				var b: Vector3 = grid[j][i + 1]
+				var c: Vector3 = grid[j + 1][i + 1]
+				var d2: Vector3 = grid[j + 1][i]
+				_add_tri(st, a, b, c, h, r)
+				_add_tri(st, a, c, d2, h, r)
+	var mesh: ArrayMesh = st.commit()
+	_rbox_cache[key] = mesh
+	return mesh
+
+static func _rounded_axis_coords(half: float, r: float, steps: Array[float]) -> Array[float]:
+	var out: Array[float] = []
+	for s in steps:
+		out.append(-half + r * s)
+	for i in range(steps.size() - 1, -1, -1):
+		var v: float = half - r * steps[i]
+		if v > out[out.size() - 1] + 1e-5:
+			out.append(v)
+	return out
+
+static func _add_tri(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, h: Vector3, r: float) -> void:
+	# Godot considera "fronte" i triangoli in senso orario visti dall'esterno
+	var outward: Vector3 = (a + b + c) / 3.0
+	var tri_n: Vector3 = (b - a).cross(c - a)
+	var verts: Array[Vector3] = [a, b, c]
+	if tri_n.dot(outward) > 0.0:
+		verts = [a, c, b]
+	for v in verts:
+		var inner := Vector3(clampf(v.x, -h.x + r, h.x - r), clampf(v.y, -h.y + r, h.y - r), clampf(v.z, -h.z + r, h.z - r))
+		var d: Vector3 = v - inner
+		st.set_normal(d.normalized() if d.length_squared() > 1e-10 else outward.normalized())
+		st.set_uv(Vector2(v.x + v.z, v.y))
+		st.add_vertex(v)
+
+# Scheggia irregolare (sfera deformata e schiacciata) per macerie realistiche
+static func _generate_rock_mesh(rng: RandomNumberGenerator) -> ArrayMesh:
+	var sphere := SphereMesh.new()
+	sphere.radius = 0.5
+	sphere.height = 1.0
+	sphere.radial_segments = 7
+	sphere.rings = 4
+	var arrays: Array = sphere.get_mesh_arrays()
+	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var squash := Vector3(rng.randf_range(0.7, 1.2), rng.randf_range(0.45, 0.8), rng.randf_range(0.7, 1.2))
+	var offsets: Dictionary = {}
+	for i in range(verts.size()):
+		var v: Vector3 = verts[i]
+		var k := "%.3f|%.3f|%.3f" % [v.x, v.y, v.z]
+		if not offsets.has(k):
+			offsets[k] = rng.randf_range(0.72, 1.18)
+		verts[i] = v * squash * float(offsets[k])
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var idx: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+	for i in range(0, idx.size(), 3):
+		for j in range(3):
+			st.add_vertex(verts[idx[i + j]])
+	st.generate_normals()
+	return st.commit()
+
+# ---------------------------------------------------------------------------------------------
+# MODELLI 3D (Poly Haven, CC0)
+# ---------------------------------------------------------------------------------------------
+static func _get_model_entry(model_id: String) -> Dictionary:
+	var path: String = MODEL_DIR % [model_id, model_id]
+	if _model_cache.has(path):
+		return _model_cache[path]
+	var entry: Dictionary = {}
+	if ResourceLoader.exists(path):
+		var ps: PackedScene = load(path)
+		if ps:
+			var probe: Node = ps.instantiate()
+			var acc: Array = []
+			_accumulate_aabb(probe, Transform3D.IDENTITY, acc)
+			probe.free()
+			if not acc.is_empty():
+				entry = {"scene": ps, "aabb": acc[0]}
+	_model_cache[path] = entry
+	return entry
+
+static func _accumulate_aabb(node: Node, xf: Transform3D, acc: Array) -> void:
+	var t: Transform3D = xf
+	if node is Node3D:
+		t = xf * (node as Node3D).transform
+	if node is MeshInstance3D and (node as MeshInstance3D).mesh:
+		var a: AABB = t * (node as MeshInstance3D).mesh.get_aabb()
+		if acc.is_empty():
+			acc.append(a)
+		else:
+			acc[0] = (acc[0] as AABB).merge(a)
+	for c in node.get_children():
+		_accumulate_aabb(c, t, acc)
+
+## Istanzia un modello adattandolo al box `fit` (anisotropia limitata per non deformarlo troppo),
+## appoggiato a quota `bottom_y` nello spazio del pivot. Ritorna l'altezza finale del modello.
+func _place_model(model_id: String, fit: Vector3, parent: Node3D, bottom_y: float = -0.5, offset: Vector3 = Vector3.ZERO, cast_shadows: bool = true) -> float:
+	var entry: Dictionary = _get_model_entry(model_id)
+	if entry.is_empty():
+		return 0.0
+	var aabb: AABB = entry["aabb"]
+	var sz: Vector3 = aabb.size.max(Vector3(0.001, 0.001, 0.001))
+	var s := Vector3(minf(fit.x / sz.x, 1.0), minf(fit.y / sz.y, 1.0), minf(fit.z / sz.z, 1.0))
+	var s_min: float = minf(s.x, minf(s.y, s.z))
+	var cap: float = s_min * 1.6
+	s = Vector3(minf(s.x, cap), minf(s.y, cap), minf(s.z, cap))
+	var inst := (entry["scene"] as PackedScene).instantiate() as Node3D
+	inst.scale = s
+	var center: Vector3 = aabb.position + aabb.size * 0.5
+	inst.position = Vector3(-center.x * s.x, bottom_y - aabb.position.y * s.y, -center.z * s.z) + offset
+	parent.add_child(inst)
+	_register_model_geometry(inst, cast_shadows)
+	return sz.y * s.y
+
+func _register_model_geometry(node: Node, cast_shadows: bool) -> void:
+	if node is GeometryInstance3D:
+		var gi := node as GeometryInstance3D
+		gi.visibility_range_end = FURNITURE_VIS_RANGE
+		gi.visibility_range_end_margin = 4.0
+		gi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+		gi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if (cast_shadows and furniture_shadows) else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_visual_meshes.append(gi)
+	for c in node.get_children():
+		_register_model_geometry(c, cast_shadows)
+
+# ---------------------------------------------------------------------------------------------
+# PROPRIETÀ & GEOMETRIA
+# ---------------------------------------------------------------------------------------------
 func _apply_material_properties() -> void:
 	if not material_data:
 		material_data = load("res://data/materials/wood_rotten.tres")
@@ -204,21 +410,28 @@ func _apply_material_properties() -> void:
 	current_hp = max_hp
 	mass = maxf(material_data.mass_kg, 1.0)
 
-func _add_sub_box(size: Vector3, pos: Vector3, rot_deg: Vector3 = Vector3.ZERO, override_mat: Material = null, parent_node: Node3D = null) -> MeshInstance3D:
+## Aggiunge un pezzo di geometria. `mat` = null -> materiale strutturale PBR del blocco.
+func _add_piece(mesh: Mesh, pos: Vector3, rot_deg: Vector3 = Vector3.ZERO, mat: Material = null, parent_node: Node3D = null) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
-	var bm := BoxMesh.new()
-	bm.size = size
-	mi.mesh = bm
+	mi.mesh = mesh
 	mi.position = pos
 	mi.rotation_degrees = rot_deg
-	var base_mat: Material = override_mat if override_mat != null else _get_or_create_base_material(material_data)
-	mi.set_surface_override_material(0, base_mat)
-	if parent_node != null:
-		parent_node.add_child(mi)
-	else:
-		add_child(mi)
+	var use_mat: Material = mat if mat != null else get_structure_material(material_data)
+	mi.material_override = use_mat
+	(parent_node if parent_node != null else _visual_root).add_child(mi)
 	_visual_meshes.append(mi)
+	if use_mat is ShaderMaterial and (use_mat as ShaderMaterial).shader == _structure_shader:
+		_shader_meshes.append(mi)
 	return mi
+
+func _add_sub_box(size: Vector3, pos: Vector3, rot_deg: Vector3 = Vector3.ZERO, override_mat: Material = null, parent_node: Node3D = null) -> MeshInstance3D:
+	return _add_piece(_get_box(size), pos, rot_deg, override_mat, parent_node)
+
+func _add_rbox(size: Vector3, radius: float, pos: Vector3, mat: Material = null, parent_node: Node3D = null, rot_deg: Vector3 = Vector3.ZERO) -> MeshInstance3D:
+	return _add_piece(_get_rounded_box(size, radius), pos, rot_deg, mat, parent_node)
+
+func _add_cyl(radius: float, height: float, pos: Vector3, mat: Material, parent_node: Node3D = null, rot_deg: Vector3 = Vector3.ZERO, top_ratio: float = 1.0) -> MeshInstance3D:
+	return _add_piece(_get_cylinder(radius, height, top_ratio), pos, rot_deg, mat, parent_node)
 
 func _set_box_collision(size: Vector3, pos: Vector3 = Vector3.ZERO, rot_deg: Vector3 = Vector3.ZERO) -> void:
 	if not collision_shape:
@@ -231,264 +444,247 @@ func _set_box_collision(size: Vector3, pos: Vector3 = Vector3.ZERO, rot_deg: Vec
 
 func _build_architectural_geometry() -> void:
 	_visual_meshes.clear()
-	var base_mat: StandardMaterial3D = _get_or_create_base_material(material_data)
-
-	if block_shape == BlockShape.FULL_CUBE:
-		if mesh_instance:
-			mesh_instance.visible = true
-			mesh_instance.set_surface_override_material(0, base_mat)
-			_visual_meshes.append(mesh_instance)
-		return
-
+	_shader_meshes.clear()
+	_visual_root = Node3D.new()
+	_visual_root.name = "Visual"
+	add_child(_visual_root)
 	if mesh_instance:
 		mesh_instance.visible = false
 
 	match block_shape:
+		BlockShape.FULL_CUBE:
+			_add_sub_box(Vector3(1.0, 1.0, 1.0), Vector3.ZERO)
+
 		BlockShape.PILLAR:
-			_add_sub_box(Vector3(0.58, 0.84, 0.58), Vector3(0, 0, 0), Vector3.ZERO, base_mat)
-			_add_sub_box(Vector3(0.76, 0.12, 0.76), Vector3(0, -0.44, 0), Vector3.ZERO, base_mat)
-			_add_sub_box(Vector3(0.76, 0.12, 0.76), Vector3(0, 0.44, 0), Vector3.ZERO, base_mat)
+			# Colonna continua: impilando più blocchi si ottiene un unico pilastro senza giunture
+			_add_sub_box(Vector3(0.62, 1.0, 0.62), Vector3.ZERO)
 			_set_box_collision(Vector3(0.70, 1.0, 0.70), Vector3.ZERO)
 
 		BlockShape.WALL_X:
-			_add_sub_box(Vector3(1.0, 1.0, 0.30), Vector3.ZERO, Vector3.ZERO, base_mat)
-			_add_sub_box(Vector3(1.0, 0.10, 0.36), Vector3(0, -0.45, 0), Vector3.ZERO, base_mat)
+			_add_sub_box(Vector3(1.0, 1.0, 0.30), Vector3.ZERO)
 			_set_box_collision(Vector3(1.0, 1.0, 0.32), Vector3.ZERO)
 
 		BlockShape.WALL_Z:
-			_add_sub_box(Vector3(0.30, 1.0, 1.0), Vector3.ZERO, Vector3.ZERO, base_mat)
-			_add_sub_box(Vector3(0.36, 0.10, 1.0), Vector3(0, -0.45, 0), Vector3.ZERO, base_mat)
+			_add_sub_box(Vector3(0.30, 1.0, 1.0), Vector3.ZERO)
 			_set_box_collision(Vector3(0.32, 1.0, 1.0), Vector3.ZERO)
 
 		BlockShape.SLAB:
-			_add_sub_box(Vector3(1.0, 0.28, 1.0), Vector3(0, 0.36, 0), Vector3.ZERO, base_mat)
+			_add_sub_box(Vector3(1.0, 0.28, 1.0), Vector3(0, 0.36, 0))
 			_set_box_collision(Vector3(1.0, 0.28, 1.0), Vector3(0, 0.36, 0))
 
 		BlockShape.SLAB_BOTTOM:
-			_add_sub_box(Vector3(1.0, 0.26, 1.0), Vector3(0, -0.37, 0), Vector3.ZERO, base_mat)
+			_add_sub_box(Vector3(1.0, 0.26, 1.0), Vector3(0, -0.37, 0))
 			_set_box_collision(Vector3(1.0, 0.26, 1.0), Vector3(0, -0.37, 0))
 
 		BlockShape.BEAM_X:
-			_add_sub_box(Vector3(1.0, 0.36, 0.36), Vector3(0, 0.32, 0), Vector3.ZERO, base_mat)
+			_add_sub_box(Vector3(1.0, 0.36, 0.36), Vector3(0, 0.32, 0))
 			_set_box_collision(Vector3(1.0, 0.36, 0.36), Vector3(0, 0.32, 0))
 
 		BlockShape.BEAM_Z:
-			_add_sub_box(Vector3(0.36, 0.36, 1.0), Vector3(0, 0.32, 0), Vector3.ZERO, base_mat)
+			_add_sub_box(Vector3(0.36, 0.36, 1.0), Vector3(0, 0.32, 0))
 			_set_box_collision(Vector3(0.36, 0.36, 1.0), Vector3(0, 0.32, 0))
 
 		BlockShape.STAIR_NORTH, BlockShape.STAIR_SOUTH, BlockShape.STAIR_EAST, BlockShape.STAIR_WEST:
-			_build_stair_geometry(base_mat)
+			_build_stair_geometry()
 
 		BlockShape.ROOF_SLOPE_N:
-			_add_sub_box(Vector3(1.02, 0.20, 1.38), Vector3(0, 0.0, 0), Vector3(35.0, 0, 0), _roof_material)
-			_set_box_collision(Vector3(1.0, 0.22, 1.35), Vector3(0, 0.0, 0), Vector3(35.0, 0, 0))
+			_add_sub_box(Vector3(1.02, 0.20, 1.38), Vector3.ZERO, Vector3(35.0, 0, 0), _roof_material)
+			_set_box_collision(Vector3(1.0, 0.22, 1.35), Vector3.ZERO, Vector3(35.0, 0, 0))
 
 		BlockShape.ROOF_SLOPE_S:
-			_add_sub_box(Vector3(1.02, 0.20, 1.38), Vector3(0, 0.0, 0), Vector3(-35.0, 0, 0), _roof_material)
-			_set_box_collision(Vector3(1.0, 0.22, 1.35), Vector3(0, 0.0, 0), Vector3(-35.0, 0, 0))
+			_add_sub_box(Vector3(1.02, 0.20, 1.38), Vector3.ZERO, Vector3(-35.0, 0, 0), _roof_material)
+			_set_box_collision(Vector3(1.0, 0.22, 1.35), Vector3.ZERO, Vector3(-35.0, 0, 0))
 
 		BlockShape.WINDOW_X:
-			var frame_mat: StandardMaterial3D = _accent_materials["dark_metal"]
-			_add_sub_box(Vector3(1.0, 0.10, 0.24), Vector3(0, -0.45, 0), Vector3.ZERO, frame_mat)
-			_add_sub_box(Vector3(1.0, 0.10, 0.24), Vector3(0, 0.45, 0), Vector3.ZERO, frame_mat)
-			_add_sub_box(Vector3(0.08, 0.82, 0.20), Vector3(-0.46, 0, 0), Vector3.ZERO, frame_mat)
-			_add_sub_box(Vector3(0.08, 0.82, 0.20), Vector3(0.46, 0, 0), Vector3.ZERO, frame_mat)
-			_add_sub_box(Vector3(0.86, 0.82, 0.08), Vector3.ZERO, Vector3.ZERO, _glass_material)
+			_build_window(false)
 			_set_box_collision(Vector3(1.0, 1.0, 0.24), Vector3.ZERO)
 
 		BlockShape.WINDOW_Z:
-			var frame_mat: StandardMaterial3D = _accent_materials["dark_metal"]
-			_add_sub_box(Vector3(0.24, 0.10, 1.0), Vector3(0, -0.45, 0), Vector3.ZERO, frame_mat)
-			_add_sub_box(Vector3(0.24, 0.10, 1.0), Vector3(0, 0.45, 0), Vector3.ZERO, frame_mat)
-			_add_sub_box(Vector3(0.20, 0.82, 0.08), Vector3(0, 0, -0.46), Vector3.ZERO, frame_mat)
-			_add_sub_box(Vector3(0.20, 0.82, 0.08), Vector3(0, 0, 0.46), Vector3.ZERO, frame_mat)
-			_add_sub_box(Vector3(0.08, 0.82, 0.86), Vector3.ZERO, Vector3.ZERO, _glass_material)
+			_build_window(true)
 			_set_box_collision(Vector3(0.24, 1.0, 1.0), Vector3.ZERO)
 
 		BlockShape.DOOR_LINTEL_X:
-			_add_sub_box(Vector3(1.0, 0.34, 0.34), Vector3(0, 0.33, 0), Vector3.ZERO, base_mat)
+			_add_sub_box(Vector3(1.0, 0.34, 0.34), Vector3(0, 0.33, 0))
 			_set_box_collision(Vector3(1.0, 0.34, 0.34), Vector3(0, 0.33, 0))
 
 		BlockShape.DOOR_LINTEL_Z:
-			_add_sub_box(Vector3(0.34, 0.34, 1.0), Vector3(0, 0.33, 0), Vector3.ZERO, base_mat)
+			_add_sub_box(Vector3(0.34, 0.34, 1.0), Vector3(0, 0.33, 0))
 			_set_box_collision(Vector3(0.34, 0.34, 1.0), Vector3(0, 0.33, 0))
 
 		BlockShape.FENCE_POST:
-			_add_sub_box(Vector3(0.26, 1.0, 0.26), Vector3.ZERO, Vector3.ZERO, base_mat)
-			_add_sub_box(Vector3(0.34, 0.10, 0.34), Vector3(0, 0.47, 0), Vector3.ZERO, base_mat)
+			_add_sub_box(Vector3(0.24, 1.0, 0.24), Vector3.ZERO)
 			_set_box_collision(Vector3(0.30, 1.0, 0.30), Vector3.ZERO)
 
 		BlockShape.FENCE_PANEL_X:
-			_add_sub_box(Vector3(1.0, 0.11, 0.12), Vector3(0, 0.26, 0), Vector3.ZERO, base_mat)
-			_add_sub_box(Vector3(1.0, 0.11, 0.12), Vector3(0, -0.26, 0), Vector3.ZERO, base_mat)
-			for i in range(4):
-				var px: float = -0.36 + float(i) * 0.24
-				_add_sub_box(Vector3(0.16, 0.96, 0.08), Vector3(px, 0.0, 0.06), Vector3.ZERO, base_mat)
+			_add_sub_box(Vector3(1.0, 0.10, 0.08), Vector3(0, 0.30, -0.02))
+			_add_sub_box(Vector3(1.0, 0.10, 0.08), Vector3(0, -0.30, -0.02))
+			for i in range(5):
+				var px: float = -0.40 + float(i) * 0.20
+				var h: float = 0.94 - float(i % 2) * 0.06
+				_add_sub_box(Vector3(0.17, h, 0.03), Vector3(px, -0.02, 0.04), Vector3(0, 0, (float(i) - 2.0) * 0.6))
 			_set_box_collision(Vector3(1.0, 0.98, 0.20), Vector3.ZERO)
 
 		_:
-			_build_furniture_geometry(base_mat)
+			_build_furniture_geometry()
 
-func _build_furniture_geometry(base_mat: StandardMaterial3D) -> void:
+func _build_window(along_z: bool) -> void:
+	# Serramento sottile (una sola mesh condivisa) + vetro: finestre affiancate = facciata continua
+	_add_piece(_get_window_frame(along_z), Vector3.ZERO, Vector3.ZERO, _frame_material)
+	if along_z:
+		_add_sub_box(Vector3(0.02, 0.9, 0.92), Vector3.ZERO, Vector3.ZERO, _glass_material)
+	else:
+		_add_sub_box(Vector3(0.92, 0.9, 0.02), Vector3.ZERO, Vector3.ZERO, _glass_material)
+
+static var _window_frame_cache: Dictionary = {}
+
+static func _get_window_frame(along_z: bool) -> ArrayMesh:
+	if _window_frame_cache.has(along_z):
+		return _window_frame_cache[along_z]
+	var t: float = 0.05
+	var parts: Array = []
+	if along_z:
+		parts = [[Vector3(0.16, t, 1.0), Vector3(0, -0.5 + t * 0.5, 0)], [Vector3(0.16, t, 1.0), Vector3(0, 0.5 - t * 0.5, 0)],
+			[Vector3(0.14, 0.9, 0.04), Vector3(0, 0, -0.48)], [Vector3(0.14, 0.9, 0.04), Vector3(0, 0, 0.48)]]
+	else:
+		parts = [[Vector3(1.0, t, 0.16), Vector3(0, -0.5 + t * 0.5, 0)], [Vector3(1.0, t, 0.16), Vector3(0, 0.5 - t * 0.5, 0)],
+			[Vector3(0.04, 0.9, 0.14), Vector3(-0.48, 0, 0)], [Vector3(0.04, 0.9, 0.14), Vector3(0.48, 0, 0)]]
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for p in parts:
+		st.append_from(_get_box(p[0]), 0, Transform3D(Basis.IDENTITY, p[1]))
+	var mesh: ArrayMesh = st.commit()
+	_window_frame_cache[along_z] = mesh
+	return mesh
+
+func _build_furniture_geometry() -> void:
 	var pivot := Node3D.new()
 	pivot.rotation_degrees = Vector3(0.0, prop_yaw_deg, 0.0)
-	add_child(pivot)
+	_visual_root.add_child(pivot)
 
-	var metal: Material = _accent_materials["dark_metal"]
+	var wood: Material = get_structure_material(material_data)
+	var dark: Material = _accent_materials["dark_metal"]
+	var steel: Material = _accent_materials["brushed_steel"]
 	var chrome: Material = _accent_materials["chrome"]
 	var brass: Material = _accent_materials["brass"]
 	var porc: Material = _accent_materials["porcelain"]
 
 	match block_shape:
 		BlockShape.FURN_DESK:
-			# Scrivania direzionale/ufficio con monitor acceso e tastiera
-			_add_sub_box(Vector3(0.94, 0.08, 0.72), Vector3(0, 0.10, 0), Vector3.ZERO, base_mat, pivot)
-			_add_sub_box(Vector3(0.07, 0.58, 0.64), Vector3(-0.42, -0.21, 0), Vector3.ZERO, metal, pivot)
-			_add_sub_box(Vector3(0.28, 0.56, 0.62), Vector3(0.31, -0.22, 0), Vector3.ZERO, base_mat, pivot)
-			# Monitor + supporto + tastiera
-			_add_sub_box(Vector3(0.42, 0.28, 0.04), Vector3(-0.08, 0.34, -0.18), Vector3.ZERO, metal, pivot)
-			_add_sub_box(Vector3(0.36, 0.22, 0.02), Vector3(-0.08, 0.34, -0.155), Vector3.ZERO, _accent_materials["screen_on"], pivot)
-			_add_sub_box(Vector3(0.08, 0.12, 0.06), Vector3(-0.08, 0.20, -0.18), Vector3.ZERO, metal, pivot)
-			_add_sub_box(Vector3(0.32, 0.025, 0.12), Vector3(-0.08, 0.15, 0.08), Vector3.ZERO, metal, pivot)
+			var desk_h: float = _place_model("metal_office_desk", Vector3(1.3, 0.78, 0.9), pivot)
+			_place_model("classic_laptop", Vector3(0.38, 0.30, 0.30), pivot, -0.5 + desk_h, Vector3(-0.1, 0, 0.05), false)
 			_set_box_collision(Vector3(0.94, 0.96, 0.74), Vector3(0, -0.02, 0))
 
 		BlockShape.FURN_CHAIR:
-			# Sedia ergonomica da ufficio/pranzo
-			_add_sub_box(Vector3(0.50, 0.08, 0.48), Vector3(0, -0.08, 0), Vector3.ZERO, _accent_materials["cushion_navy"], pivot)
-			_add_sub_box(Vector3(0.48, 0.46, 0.08), Vector3(0, 0.16, -0.22), Vector3.ZERO, _accent_materials["cushion_navy"], pivot)
-			_add_sub_box(Vector3(0.07, 0.36, 0.07), Vector3(0, -0.30, 0), Vector3.ZERO, chrome, pivot)
-			_add_sub_box(Vector3(0.46, 0.06, 0.08), Vector3(0, -0.47, 0), Vector3.ZERO, metal, pivot)
-			_add_sub_box(Vector3(0.08, 0.06, 0.46), Vector3(0, -0.47, 0), Vector3.ZERO, metal, pivot)
+			_place_model("modern_arm_chair_01", Vector3(0.78, 0.95, 0.85), pivot)
 			_set_box_collision(Vector3(0.56, 0.90, 0.56), Vector3(0, -0.05, 0))
 
 		BlockShape.FURN_SOFA:
-			# Divano lounge imbottito con braccioli e cuscini
-			_add_sub_box(Vector3(0.96, 0.22, 0.82), Vector3(0, -0.34, 0.04), Vector3.ZERO, base_mat, pivot)
-			_add_sub_box(Vector3(0.92, 0.16, 0.72), Vector3(0, -0.16, 0.06), Vector3.ZERO, _accent_materials["cushion_red"], pivot)
-			_add_sub_box(Vector3(0.96, 0.48, 0.20), Vector3(0, 0.02, -0.28), Vector3.ZERO, base_mat, pivot)
-			_add_sub_box(Vector3(0.14, 0.36, 0.82), Vector3(-0.42, -0.12, 0.04), Vector3.ZERO, base_mat, pivot)
-			_add_sub_box(Vector3(0.14, 0.36, 0.82), Vector3(0.42, -0.12, 0.04), Vector3.ZERO, base_mat, pivot)
+			_place_model("sofa_02", Vector3(1.35, 0.78, 0.86), pivot)
 			_set_box_collision(Vector3(0.96, 0.78, 0.84), Vector3(0, -0.11, 0))
 
 		BlockShape.FURN_TABLE:
-			# Tavolo ristorante / riunioni con 4 gambe
-			_add_sub_box(Vector3(0.94, 0.09, 0.94), Vector3(0, 0.12, 0), Vector3.ZERO, base_mat, pivot)
-			for gx in [-0.38, 0.38]:
-				for gz in [-0.38, 0.38]:
-					_add_sub_box(Vector3(0.08, 0.60, 0.08), Vector3(gx, -0.20, gz), Vector3.ZERO, metal, pivot)
+			_place_model("WoodenTable_01", Vector3(1.15, 0.76, 0.9), pivot)
 			_set_box_collision(Vector3(0.94, 0.68, 0.94), Vector3(0, -0.16, 0))
 
-		BlockShape.FURN_BAR_COUNTER:
-			# Bancone Bar / Reception con top in granito, poggiapiedi in ottone e bottiglie
-			_add_sub_box(Vector3(0.98, 0.78, 0.66), Vector3(0, -0.11, 0), Vector3.ZERO, base_mat, pivot)
-			_add_sub_box(Vector3(1.00, 0.10, 0.80), Vector3(0, 0.32, 0.04), Vector3.ZERO, _accent_materials["granite"], pivot)
-			_add_sub_box(Vector3(0.96, 0.05, 0.05), Vector3(0, -0.34, 0.40), Vector3.ZERO, brass, pivot)
-			# Bottiglie / macchina caffè sul bancone
-			_add_sub_box(Vector3(0.10, 0.24, 0.10), Vector3(-0.28, 0.48, -0.10), Vector3.ZERO, _accent_materials["bottle_amber"], pivot)
-			_add_sub_box(Vector3(0.10, 0.26, 0.10), Vector3(-0.12, 0.49, -0.12), Vector3.ZERO, _accent_materials["bottle_green"], pivot)
-			_add_sub_box(Vector3(0.28, 0.24, 0.24), Vector3(0.24, 0.48, -0.06), Vector3.ZERO, chrome, pivot)
-			_set_box_collision(Vector3(1.0, 0.98, 0.82), Vector3(0, -0.01, 0))
-
 		BlockShape.FURN_BAR_STOOL:
-			# Sgabello alto da bar con cuscino rosso e poggiapiedi cromato
-			_add_sub_box(Vector3(0.42, 0.10, 0.42), Vector3(0, 0.16, 0), Vector3.ZERO, _accent_materials["cushion_red"], pivot)
-			_add_sub_box(Vector3(0.08, 0.62, 0.08), Vector3(0, -0.18, 0), Vector3.ZERO, chrome, pivot)
-			_add_sub_box(Vector3(0.36, 0.04, 0.36), Vector3(0, -0.24, 0), Vector3.ZERO, brass, pivot)
-			_add_sub_box(Vector3(0.40, 0.05, 0.40), Vector3(0, -0.47, 0), Vector3.ZERO, chrome, pivot)
+			_place_model("bar_chair_round_01", Vector3(0.5, 0.82, 0.5), pivot, -0.5, Vector3.ZERO, false)
 			_set_box_collision(Vector3(0.44, 0.72, 0.44), Vector3(0, -0.14, 0))
 
-		BlockShape.FURN_TOILET:
-			# WC completo in porcellana bianca con cassetta e scarico cromato
-			_add_sub_box(Vector3(0.38, 0.24, 0.42), Vector3(0, -0.38, 0.04), Vector3.ZERO, porc, pivot)
-			_add_sub_box(Vector3(0.48, 0.20, 0.54), Vector3(0, -0.18, 0.08), Vector3.ZERO, porc, pivot)
-			_add_sub_box(Vector3(0.48, 0.06, 0.52), Vector3(0, -0.05, 0.08), Vector3.ZERO, _accent_materials["cushion_cream"], pivot)
-			_add_sub_box(Vector3(0.48, 0.56, 0.24), Vector3(0, -0.02, -0.28), Vector3.ZERO, porc, pivot)
-			_add_sub_box(Vector3(0.10, 0.04, 0.08), Vector3(0, 0.28, -0.28), Vector3.ZERO, chrome, pivot)
-			_set_box_collision(Vector3(0.54, 0.80, 0.74), Vector3(0, -0.10, 0))
-
-		BlockShape.FURN_SINK:
-			# Mobile lavabo bagno con rubinetto cromato e specchio
-			_add_sub_box(Vector3(0.76, 0.54, 0.52), Vector3(0, -0.23, -0.12), Vector3.ZERO, base_mat, pivot)
-			_add_sub_box(Vector3(0.80, 0.12, 0.56), Vector3(0, 0.08, -0.12), Vector3.ZERO, porc, pivot)
-			_add_sub_box(Vector3(0.06, 0.16, 0.14), Vector3(0, 0.20, -0.26), Vector3.ZERO, chrome, pivot)
-			_add_sub_box(Vector3(0.68, 0.42, 0.05), Vector3(0, 0.52, -0.36), Vector3.ZERO, _accent_materials["mirror"], pivot)
-			_set_box_collision(Vector3(0.80, 0.96, 0.58), Vector3(0, -0.02, -0.10))
-
-		BlockShape.FURN_BATHTUB:
-			# Vasca da bagno in porcellana con rubinetto cromato
-			_add_sub_box(Vector3(0.96, 0.46, 0.82), Vector3(0, -0.27, 0), Vector3.ZERO, porc, pivot)
-			_add_sub_box(Vector3(0.80, 0.12, 0.64), Vector3(0, -0.06, 0), Vector3.ZERO, _accent_materials["cushion_navy"], pivot)
-			_add_sub_box(Vector3(0.08, 0.26, 0.10), Vector3(-0.38, 0.08, 0), Vector3.ZERO, chrome, pivot)
-			_set_box_collision(Vector3(0.96, 0.56, 0.82), Vector3(0, -0.22, 0))
-
-		BlockShape.FURN_BED:
-			# Letto residenziale con testiera in legno, materasso, coperta e cuscini
-			_add_sub_box(Vector3(0.96, 0.24, 0.96), Vector3(0, -0.36, 0), Vector3.ZERO, base_mat, pivot)
-			_add_sub_box(Vector3(0.90, 0.20, 0.90), Vector3(0, -0.14, 0.02), Vector3.ZERO, _accent_materials["cushion_cream"], pivot)
-			_add_sub_box(Vector3(0.92, 0.12, 0.62), Vector3(0, -0.06, 0.16), Vector3.ZERO, _accent_materials["cushion_navy"], pivot)
-			_add_sub_box(Vector3(0.36, 0.12, 0.22), Vector3(-0.22, -0.01, -0.28), Vector3.ZERO, porc, pivot)
-			_add_sub_box(Vector3(0.36, 0.12, 0.22), Vector3(0.22, -0.01, -0.28), Vector3.ZERO, porc, pivot)
-			_add_sub_box(Vector3(0.96, 0.68, 0.10), Vector3(0, -0.08, -0.44), Vector3.ZERO, base_mat, pivot)
-			_set_box_collision(Vector3(0.96, 0.68, 0.96), Vector3(0, -0.16, 0))
-
 		BlockShape.FURN_BOOKSHELF:
-			# Libreria / Archivio con 3 ripiani di libri colorati
-			_add_sub_box(Vector3(0.92, 0.98, 0.42), Vector3(0, 0, -0.20), Vector3.ZERO, base_mat, pivot)
-			_add_sub_box(Vector3(0.76, 0.18, 0.14), Vector3(0, 0.28, 0.02), Vector3.ZERO, _accent_materials["book_blue"], pivot)
-			_add_sub_box(Vector3(0.74, 0.18, 0.14), Vector3(0, 0.0, 0.02), Vector3.ZERO, _accent_materials["cushion_red"], pivot)
-			_add_sub_box(Vector3(0.76, 0.18, 0.14), Vector3(0, -0.28, 0.02), Vector3.ZERO, _accent_materials["book_gold"], pivot)
+			_place_model("Shelf_01", Vector3(0.96, 1.9, 0.45), pivot, -0.5, Vector3(0, 0, -0.26))
 			_set_box_collision(Vector3(0.94, 1.0, 0.50), Vector3(0, 0, -0.16))
 
-		BlockShape.FURN_KITCHEN_COUNTER:
-			# Piano cucina con fornelli, top in granito e maniglie
-			_add_sub_box(Vector3(0.96, 0.76, 0.68), Vector3(0, -0.12, -0.06), Vector3.ZERO, base_mat, pivot)
-			_add_sub_box(Vector3(0.98, 0.09, 0.72), Vector3(0, 0.30, -0.06), Vector3.ZERO, _accent_materials["granite"], pivot)
-			_add_sub_box(Vector3(0.44, 0.04, 0.44), Vector3(0.12, 0.36, -0.06), Vector3.ZERO, metal, pivot)
-			_add_sub_box(Vector3(0.32, 0.04, 0.04), Vector3(-0.22, 0.14, 0.30), Vector3.ZERO, chrome, pivot)
-			_add_sub_box(Vector3(0.32, 0.04, 0.04), Vector3(0.22, 0.14, 0.30), Vector3.ZERO, chrome, pivot)
-			_set_box_collision(Vector3(0.98, 0.90, 0.72), Vector3(0, -0.05, -0.06))
-
-		BlockShape.FURN_FRIDGE:
-			# Frigorifero doppia anta in acciaio inox con maniglie cromate
-			_add_sub_box(Vector3(0.78, 0.98, 0.72), Vector3(0, 0, 0), Vector3.ZERO, base_mat, pivot)
-			_add_sub_box(Vector3(0.74, 0.03, 0.04), Vector3(0, 0.12, 0.36), Vector3.ZERO, metal, pivot)
-			_add_sub_box(Vector3(0.05, 0.30, 0.06), Vector3(-0.28, 0.30, 0.38), Vector3.ZERO, chrome, pivot)
-			_add_sub_box(Vector3(0.05, 0.42, 0.06), Vector3(-0.28, -0.14, 0.38), Vector3.ZERO, chrome, pivot)
-			_set_box_collision(Vector3(0.80, 1.0, 0.76), Vector3.ZERO)
-
-		BlockShape.FURN_SERVER_RACK:
-			# Rack Server IT / Distributore con griglie e LED verdi luminosi
-			_add_sub_box(Vector3(0.84, 0.98, 0.76), Vector3(0, 0, 0), Vector3.ZERO, metal, pivot)
-			for sy in [-0.30, -0.08, 0.14, 0.34]:
-				_add_sub_box(Vector3(0.68, 0.12, 0.04), Vector3(0, sy, 0.38), Vector3.ZERO, base_mat, pivot)
-				_add_sub_box(Vector3(0.08, 0.04, 0.05), Vector3(0.24, sy, 0.39), Vector3.ZERO, _accent_materials["led_green"], pivot)
-			_set_box_collision(Vector3(0.86, 1.0, 0.80), Vector3.ZERO)
-
 		BlockShape.FURN_PLANT:
-			# Pianta ornamentale da interni in vaso di terracotta
-			_add_sub_box(Vector3(0.46, 0.40, 0.46), Vector3(0, -0.30, 0), Vector3.ZERO, _accent_materials["terracotta"], pivot)
-			_add_sub_box(Vector3(0.40, 0.06, 0.40), Vector3(0, -0.09, 0), Vector3.ZERO, _accent_materials["soil"], pivot)
-			_add_sub_box(Vector3(0.56, 0.36, 0.56), Vector3(0, 0.12, 0), Vector3(0, 18, 0), _accent_materials["foliage"], pivot)
-			_add_sub_box(Vector3(0.40, 0.34, 0.40), Vector3(0, 0.34, 0), Vector3(0, 45, 0), _accent_materials["foliage"], pivot)
+			_place_model("potted_plant_02", Vector3(0.7, 0.95, 0.7), pivot, -0.5, Vector3.ZERO, false)
 			_set_box_collision(Vector3(0.56, 0.96, 0.56), Vector3(0, -0.02, 0))
 
 		BlockShape.FURN_TV_STAND:
-			# Mobile TV con maxi schermo piatto acceso
-			_add_sub_box(Vector3(0.96, 0.36, 0.52), Vector3(0, -0.32, 0), Vector3.ZERO, base_mat, pivot)
-			_add_sub_box(Vector3(0.14, 0.14, 0.10), Vector3(0, -0.08, -0.06), Vector3.ZERO, metal, pivot)
-			_add_sub_box(Vector3(0.90, 0.50, 0.06), Vector3(0, 0.22, -0.06), Vector3.ZERO, metal, pivot)
-			_add_sub_box(Vector3(0.82, 0.42, 0.03), Vector3(0, 0.22, -0.02), Vector3.ZERO, _accent_materials["screen_on"], pivot)
+			var cab_h: float = _place_model("modern_wooden_cabinet", Vector3(1.25, 0.5, 0.5), pivot, -0.5, Vector3(0, 0, -0.12))
+			_place_model("Television_01", Vector3(0.75, 0.55, 0.4), pivot, -0.5 + cab_h, Vector3(0, 0, -0.15))
 			_set_box_collision(Vector3(0.96, 0.96, 0.54), Vector3(0, -0.02, 0))
 
 		BlockShape.FURN_HVAC_UNIT:
-			# Unità Condizionamento Industriale da tetto
-			_add_sub_box(Vector3(0.94, 0.84, 0.94), Vector3(0, -0.08, 0), Vector3.ZERO, base_mat, pivot)
-			_add_sub_box(Vector3(0.68, 0.08, 0.68), Vector3(0, 0.38, 0), Vector3.ZERO, metal, pivot)
-			_add_sub_box(Vector3(0.70, 0.46, 0.06), Vector3(0, -0.06, 0.48), Vector3.ZERO, metal, pivot)
+			_place_model("exterior_aircon_unit", Vector3(1.0, 0.9, 0.55), pivot)
 			_set_box_collision(Vector3(0.96, 0.92, 0.96), Vector3(0, -0.04, 0))
 
-func _build_stair_geometry(base_mat: StandardMaterial3D) -> void:
-	# 4 gradini scolpiti + rampa fisica continua a 45° perfettamente allineata
+		BlockShape.FURN_BAR_COUNTER:
+			# Bancone: fronte in legno, top in granito lucido, poggiapiedi in ottone, bottiglie
+			_add_rbox(Vector3(0.98, 0.96, 0.62), 0.03, Vector3(0, -0.04, -0.02), wood, pivot)
+			_add_rbox(Vector3(1.0, 0.06, 0.78), 0.02, Vector3(0, 0.47, 0.04), _accent_materials["granite"], pivot)
+			_add_cyl(0.022, 0.98, Vector3(0, -0.36, 0.40), brass, pivot, Vector3(0, 0, 90))
+			_add_cyl(0.04, 0.26, Vector3(-0.30, 0.63, -0.16), _accent_materials["bottle_amber"], pivot, Vector3.ZERO, 0.45)
+			_add_cyl(0.04, 0.30, Vector3(-0.18, 0.65, -0.20), _accent_materials["bottle_green"], pivot, Vector3.ZERO, 0.45)
+			_add_rbox(Vector3(0.30, 0.30, 0.26), 0.03, Vector3(0.26, 0.65, -0.12), steel, pivot)
+			_set_box_collision(Vector3(1.0, 1.0, 0.82), Vector3.ZERO)
+
+		BlockShape.FURN_TOILET:
+			# WC sospeso in ceramica: tazza arrotondata, sedile, cassetta, pulsante cromato
+			_add_rbox(Vector3(0.36, 0.34, 0.50), 0.14, Vector3(0, -0.22, 0.06), porc, pivot)
+			_add_rbox(Vector3(0.38, 0.04, 0.48), 0.12, Vector3(0, -0.03, 0.07), porc, pivot)
+			_add_rbox(Vector3(0.44, 0.48, 0.18), 0.05, Vector3(0, 0.05, -0.30), porc, pivot)
+			_add_rbox(Vector3(0.10, 0.06, 0.02), 0.01, Vector3(0, 0.18, -0.205), chrome, pivot)
+			_set_box_collision(Vector3(0.54, 0.80, 0.74), Vector3(0, -0.10, 0))
+
+		BlockShape.FURN_SINK:
+			# Mobile lavabo sospeso: cassettone in legno, lavabo in ceramica, rubinetto, specchio
+			_add_rbox(Vector3(0.78, 0.40, 0.46), 0.02, Vector3(0, -0.06, -0.20), wood, pivot)
+			_add_rbox(Vector3(0.80, 0.10, 0.50), 0.04, Vector3(0, 0.19, -0.19), porc, pivot)
+			_add_rbox(Vector3(0.56, 0.02, 0.32), 0.12, Vector3(0, 0.245, -0.16), _accent_materials["water"], pivot)
+			_add_cyl(0.018, 0.16, Vector3(0, 0.32, -0.38), chrome, pivot)
+			_add_cyl(0.014, 0.12, Vector3(0, 0.39, -0.33), chrome, pivot, Vector3(90, 0, 0))
+			_add_rbox(Vector3(0.70, 0.52, 0.02), 0.01, Vector3(0, 0.62, -0.46), _accent_materials["mirror"], pivot)
+			_set_box_collision(Vector3(0.80, 0.96, 0.58), Vector3(0, -0.02, -0.10))
+
+		BlockShape.FURN_BATHTUB:
+			# Vasca in ceramica con bordo arrotondato, acqua e miscelatore
+			_add_rbox(Vector3(0.96, 0.52, 0.80), 0.10, Vector3(0, -0.24, 0), porc, pivot)
+			_add_rbox(Vector3(0.80, 0.02, 0.62), 0.16, Vector3(0, 0.015, 0), _accent_materials["water"], pivot)
+			_add_cyl(0.02, 0.22, Vector3(-0.40, 0.12, 0), chrome, pivot)
+			_add_cyl(0.016, 0.14, Vector3(-0.34, 0.22, 0), chrome, pivot, Vector3(0, 0, 90))
+			_set_box_collision(Vector3(0.96, 0.56, 0.82), Vector3(0, -0.22, 0))
+
+		BlockShape.FURN_BED:
+			# Letto: struttura in legno, materasso, piumone, cuscini, testiera imbottita
+			_add_rbox(Vector3(0.98, 0.22, 0.98), 0.02, Vector3(0, -0.36, 0.0), wood, pivot)
+			_add_rbox(Vector3(0.92, 0.18, 0.92), 0.06, Vector3(0, -0.17, 0.02), _accent_materials["linen"], pivot)
+			_add_rbox(Vector3(0.95, 0.10, 0.64), 0.05, Vector3(0, -0.07, 0.16), _accent_materials["duvet"], pivot)
+			_add_rbox(Vector3(0.38, 0.11, 0.22), 0.05, Vector3(-0.22, -0.03, -0.30), _accent_materials["linen"], pivot)
+			_add_rbox(Vector3(0.38, 0.11, 0.22), 0.05, Vector3(0.22, -0.03, -0.30), _accent_materials["linen"], pivot)
+			_add_rbox(Vector3(0.98, 0.70, 0.08), 0.035, Vector3(0, -0.10, -0.46), get_structure_material(load("res://data/materials/fabric_sofa.tres")), pivot)
+			_set_box_collision(Vector3(0.96, 0.68, 0.96), Vector3(0, -0.16, 0))
+
+		BlockShape.FURN_KITCHEN_COUNTER:
+			# Cucina: basi in legno con zoccolo, top in granito, piano cottura a induzione, maniglie
+			_add_sub_box(Vector3(0.94, 0.08, 0.58), Vector3(0, -0.46, -0.08), Vector3.ZERO, dark, pivot)
+			_add_rbox(Vector3(0.98, 0.74, 0.62), 0.012, Vector3(0, -0.05, -0.06), wood, pivot)
+			_add_rbox(Vector3(1.0, 0.04, 0.68), 0.01, Vector3(0, 0.34, -0.06), _accent_materials["granite"], pivot)
+			_add_rbox(Vector3(0.52, 0.008, 0.44), 0.01, Vector3(0.14, 0.364, -0.08), _accent_materials["black_glass"], pivot)
+			_add_rbox(Vector3(0.30, 0.02, 0.02), 0.008, Vector3(-0.24, 0.20, 0.26), steel, pivot)
+			_add_rbox(Vector3(0.30, 0.02, 0.02), 0.008, Vector3(0.24, 0.20, 0.26), steel, pivot)
+			_set_box_collision(Vector3(0.98, 0.90, 0.72), Vector3(0, -0.05, -0.06))
+
+		BlockShape.FURN_FRIDGE:
+			# Frigorifero combinato in acciaio spazzolato con fuga tra le ante e maniglie verticali
+			_add_rbox(Vector3(0.74, 0.98, 0.70), 0.03, Vector3(0, 0, -0.02), steel, pivot)
+			_add_sub_box(Vector3(0.72, 0.012, 0.02), Vector3(0, 0.12, 0.335), Vector3.ZERO, dark, pivot)
+			_add_rbox(Vector3(0.025, 0.30, 0.035), 0.012, Vector3(-0.30, 0.32, 0.36), chrome, pivot)
+			_add_rbox(Vector3(0.025, 0.40, 0.035), 0.012, Vector3(-0.30, -0.12, 0.36), chrome, pivot)
+			_set_box_collision(Vector3(0.80, 1.0, 0.76), Vector3.ZERO)
+
+		BlockShape.FURN_SERVER_RACK:
+			# Rack 42U: telaio nero, server con griglie di ventilazione e LED di stato
+			_add_rbox(Vector3(0.62, 0.98, 0.80), 0.015, Vector3.ZERO, dark, pivot)
+			for i in range(7):
+				var sy: float = -0.40 + float(i) * 0.13
+				_add_sub_box(Vector3(0.54, 0.10, 0.02), Vector3(0, sy, 0.40), Vector3.ZERO, _accent_materials["vent"], pivot)
+				_add_sub_box(Vector3(0.03, 0.015, 0.02), Vector3(0.22, sy + 0.02, 0.412), Vector3.ZERO, _accent_materials["led_green"] if i % 3 != 0 else _accent_materials["led_blue"], pivot)
+			_set_box_collision(Vector3(0.86, 1.0, 0.80), Vector3.ZERO)
+
+		_:
+			_add_rbox(Vector3(0.8, 0.8, 0.8), 0.05, Vector3.ZERO, wood, pivot)
+
+func _build_stair_geometry() -> void:
+	# 4 gradini + rampa fisica continua a 45° perfettamente allineata
 	var yaw: float = 0.0
 	match block_shape:
 		BlockShape.STAIR_NORTH: yaw = 0.0       # sale verso -Z
@@ -504,7 +700,7 @@ func _build_stair_geometry(base_mat: StandardMaterial3D) -> void:
 		var step_size: Vector3 = Vector3(0.98, step_h, 0.26)
 		if block_shape == BlockShape.STAIR_EAST or block_shape == BlockShape.STAIR_WEST:
 			step_size = Vector3(0.26, step_h, 0.98)
-		_add_sub_box(step_size, world_local, Vector3.ZERO, base_mat)
+		_add_sub_box(step_size, world_local)
 
 	var ramp_rot := Vector3(45.0, 0.0, 0.0)
 	match block_shape:
@@ -523,49 +719,24 @@ func get_display_label() -> String:
 		return custom_display_name
 	return material_data.display_name if material_data else "Struttura"
 
-func _apply_material_to_all_meshes(mat: Material) -> void:
-	for mi in _visual_meshes:
-		if is_instance_valid(mi):
-			mi.set_surface_override_material(0, mat)
-
-func _ensure_instance_material() -> StandardMaterial3D:
-	if _instance_material == null:
-		var base := _get_or_create_base_material(material_data) if material_data else StandardMaterial3D.new()
-		_instance_material = base.duplicate() as StandardMaterial3D
-		if not _visual_meshes.is_empty() and is_instance_valid(_visual_meshes[0]):
-			_visual_meshes[0].set_surface_override_material(0, _instance_material)
-	return _instance_material
-
-func _refresh_overlay_passes() -> void:
-	if _crack_stage == 0 and not _xray_enabled:
-		if material_data and not _visual_meshes.is_empty() and is_instance_valid(_visual_meshes[0]):
-			_visual_meshes[0].set_surface_override_material(0, _get_or_create_base_material(material_data))
-		_instance_material = null
-		return
-
-	var mat := _ensure_instance_material()
-	var crack_mat: StandardMaterial3D = null
-	if _crack_stage > 0 and _crack_stage <= _crack_materials.size():
-		crack_mat = _crack_materials[_crack_stage - 1]
-
-	if crack_mat != null and _xray_enabled and _xray_material != null:
-		var crack_dup := crack_mat.duplicate() as StandardMaterial3D
-		crack_dup.next_pass = _xray_material
-		mat.next_pass = crack_dup
-	elif crack_mat != null:
-		mat.next_pass = crack_mat
-	elif _xray_enabled and _xray_material != null:
-		mat.next_pass = _xray_material
-	else:
-		mat.next_pass = null
-
+# ---------------------------------------------------------------------------------------------
+# STATO VISIVO: X-RAY, DANNI, IMPATTI
+# ---------------------------------------------------------------------------------------------
 func set_xray_highlight(enabled: bool) -> void:
 	if is_destroyed or not freeze:
 		enabled = false
 	if _xray_enabled == enabled:
 		return
 	_xray_enabled = enabled
-	_refresh_overlay_passes()
+	var overlay: Material = _xray_material if enabled else null
+	for gi in _visual_meshes:
+		if is_instance_valid(gi):
+			gi.material_overlay = overlay
+
+func _set_shader_instance_param(param: StringName, value: Variant) -> void:
+	for gi in _shader_meshes:
+		if is_instance_valid(gi):
+			gi.set_instance_shader_parameter(param, value)
 
 func take_damage(
 	amount: float,
@@ -584,7 +755,7 @@ func take_damage(
 	if tool_penetration < req_tier:
 		actual_damage = amount * 0.10
 		EventBus.block_ricochet.emit(self, hit_pos, normal, req_tier)
-		_spawn_hit_particles(hit_pos, normal, Color(1.0, 0.78, 0.22), 7, 4.2)
+		_spawn_sparks(hit_pos, normal)
 	else:
 		var dcol: Color = material_data.dust_color if material_data else Color(0.7, 0.65, 0.6)
 		_spawn_hit_particles(hit_pos, normal, dcol, 6, 3.0)
@@ -600,31 +771,21 @@ func take_damage(
 
 func _update_damage_visuals() -> void:
 	var ratio: float = current_hp / maxf(max_hp, 1.0)
-	var new_stage: int = 0
-	if ratio <= 0.28:
-		new_stage = 3
-	elif ratio <= 0.56:
-		new_stage = 2
-	elif ratio <= 0.82:
-		new_stage = 1
-
-	if new_stage != _crack_stage:
-		_crack_stage = new_stage
-		_refresh_overlay_passes()
-
-	if _instance_material != null and material_data:
-		var darken: float = lerpf(0.74, 1.0, ratio)
-		_instance_material.albedo_color = material_data.color * Color(darken, darken, darken, _instance_material.albedo_color.a)
+	var dmg: float = clampf(1.0 - ratio, 0.0, 1.0)
+	if absf(dmg - _damage_level) > 0.01:
+		_damage_level = dmg
+		_set_shader_instance_param(&"damage", dmg)
 
 func _play_hit_jolt() -> void:
-	if is_destroyed or _visual_meshes.is_empty():
+	if is_destroyed or not is_instance_valid(_visual_root):
 		return
-	var target: MeshInstance3D = _visual_meshes[0]
-	if not is_instance_valid(target):
-		return
-	target.scale = Vector3(0.94, 0.94, 0.94)
-	var t: Tween = create_tween()
-	t.tween_property(target, "scale", Vector3.ONE, 0.08).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	if _jolt_tween and _jolt_tween.is_valid():
+		_jolt_tween.kill()
+	_visual_root.scale = Vector3(0.96, 0.96, 0.96)
+	_set_shader_instance_param(&"hit_flash", 1.0)
+	_jolt_tween = create_tween()
+	_jolt_tween.tween_property(_visual_root, "scale", Vector3.ONE, 0.09).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_jolt_tween.parallel().tween_method(func(v: float): _set_shader_instance_param(&"hit_flash", v), 1.0, 0.0, 0.12)
 
 func shatter(by_gravity: bool = false) -> void:
 	if is_destroyed:
@@ -643,6 +804,7 @@ func shatter(by_gravity: bool = false) -> void:
 	if not by_gravity:
 		var dcol: Color = material_data.dust_color if material_data else Color(0.7, 0.65, 0.6)
 		_spawn_hit_particles(pos, Vector3.UP, dcol, 10, 4.4)
+		_spawn_dust_cloud(pos, dcol)
 		_spawn_shatter_shards(pos)
 
 	EventBus.block_destroyed.emit(self, by_gravity)
@@ -653,6 +815,8 @@ func activate_dynamic_debris(impulse: Vector3 = Vector3.ZERO) -> void:
 		return
 
 	set_xray_highlight(false)
+	# La texture ora segue il pezzo che cade (mappatura in spazio oggetto)
+	_set_shader_instance_param(&"local_mode", 1.0)
 	freeze = false
 	collision_layer = 8
 	collision_mask = 1 | 4 | 8
@@ -663,6 +827,9 @@ func activate_dynamic_debris(impulse: Vector3 = Vector3.ZERO) -> void:
 
 	DebrisPool.register_debris(self)
 
+# ---------------------------------------------------------------------------------------------
+# VFX: polvere, schegge, scintille (con budget per frame anti-lag durante le esplosioni)
+# ---------------------------------------------------------------------------------------------
 func _check_fx_budget(is_shard: bool) -> bool:
 	var frame: int = Engine.get_process_frames()
 	if frame != _last_fx_frame:
@@ -674,10 +841,38 @@ func _check_fx_budget(is_shard: bool) -> bool:
 			return false
 		_frame_shard_count += 1
 		return true
-	if _frame_particle_count >= 4:
+	if _frame_particle_count >= 5:
 		return false
 	_frame_particle_count += 1
 	return true
+
+static func _get_dust_material(col: Color) -> StandardMaterial3D:
+	var key := col.to_html(false)
+	if _dust_materials.has(key):
+		return _dust_materials[key]
+	var tex := GradientTexture2D.new()
+	tex.fill = GradientTexture2D.FILL_RADIAL
+	tex.fill_from = Vector2(0.5, 0.5)
+	tex.fill_to = Vector2(0.5, 0.0)
+	var g := Gradient.new()
+	g.set_color(0, Color(1, 1, 1, 1))
+	g.set_color(1, Color(1, 1, 1, 0))
+	g.add_point(0.45, Color(1, 1, 1, 0.55))
+	tex.gradient = g
+	tex.width = 64
+	tex.height = 64
+	var m := StandardMaterial3D.new()
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	m.vertex_color_use_as_albedo = true
+	m.albedo_color = col.lightened(0.15)
+	m.albedo_texture = tex
+	m.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+	m.proximity_fade_enabled = true
+	m.proximity_fade_distance = 0.4
+	_dust_materials[key] = m
+	return m
 
 func _spawn_hit_particles(pos: Vector3, normal: Vector3, color: Color, amount: int, speed: float) -> void:
 	if not _check_fx_budget(false):
@@ -686,35 +881,112 @@ func _spawn_hit_particles(pos: Vector3, normal: Vector3, color: Color, amount: i
 	if not root:
 		return
 
-	var p := CPUParticles3D.new()
-	p.one_shot = true
-	p.explosiveness = 0.92
-	p.amount = amount
-	p.lifetime = 0.38
-	p.mesh = _particle_mesh
-	p.direction = (normal + Vector3(0, 0.4, 0)).normalized()
-	p.spread = 52.0
-	p.initial_velocity_min = speed * 0.55
-	p.initial_velocity_max = speed
-	p.gravity = Vector3(0, -14.0, 0)
-	p.scale_amount_min = 0.6
-	p.scale_amount_max = 1.25
+	# Schegge piccole (mesh irregolari) + sbuffo di polvere
+	var chips := CPUParticles3D.new()
+	chips.one_shot = true
+	chips.explosiveness = 0.95
+	chips.amount = amount
+	chips.lifetime = 0.55
+	chips.mesh = _rock_meshes[randi() % _rock_meshes.size()]
+	chips.direction = (normal + Vector3(0, 0.45, 0)).normalized()
+	chips.spread = 50.0
+	chips.initial_velocity_min = speed * 0.6
+	chips.initial_velocity_max = speed * 1.1
+	chips.gravity = Vector3(0, -14.0, 0)
+	chips.scale_amount_min = 0.05
+	chips.scale_amount_max = 0.12
+	chips.angular_velocity_min = -400.0
+	chips.angular_velocity_max = 400.0
+	chips.material_override = get_structure_material(material_data)
+	root.add_child(chips)
+	chips.global_position = pos
+	chips.emitting = true
 
-	var pm := StandardMaterial3D.new()
-	pm.albedo_color = color
-	pm.roughness = 0.85
-	pm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	p.material_override = pm
+	var dust := _make_dust_emitter(color, 4, 0.9, 0.35)
+	dust.direction = normal
+	dust.initial_velocity_min = 0.4
+	dust.initial_velocity_max = 1.3
+	root.add_child(dust)
+	dust.global_position = pos + normal * 0.05
+	dust.emitting = true
 
-	root.add_child(p)
-	p.global_position = pos
-	p.emitting = true
+	_free_later(chips, 0.9)
+	_free_later(dust, 1.2)
 
-	var t := p.create_tween()
-	t.tween_interval(0.55)
+func _make_dust_emitter(color: Color, amount: int, lifetime: float, size_scale: float) -> CPUParticles3D:
+	var d := CPUParticles3D.new()
+	d.one_shot = true
+	d.explosiveness = 0.85
+	d.amount = amount
+	d.lifetime = lifetime
+	d.mesh = _dust_quad
+	d.material_override = _get_dust_material(color)
+	d.spread = 70.0
+	d.gravity = Vector3(0, 0.25, 0)
+	d.damping_min = 1.5
+	d.damping_max = 3.0
+	d.scale_amount_min = size_scale * 0.7
+	d.scale_amount_max = size_scale * 1.4
+	d.scale_amount_curve = _dust_curve
+	d.color_ramp = _dust_ramp
+	d.angle_min = -180.0
+	d.angle_max = 180.0
+	d.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return d
+
+func _spawn_dust_cloud(pos: Vector3, color: Color) -> void:
+	if not _check_fx_budget(false):
+		return
+	var root := get_tree().current_scene
+	if not root:
+		return
+	var cloud := _make_dust_emitter(color, 7, 1.8, 1.6)
+	cloud.direction = Vector3.UP
+	cloud.spread = 180.0
+	cloud.initial_velocity_min = 0.6
+	cloud.initial_velocity_max = 1.8
+	cloud.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	cloud.emission_sphere_radius = 0.4
+	root.add_child(cloud)
+	cloud.global_position = pos
+	cloud.emitting = true
+	_free_later(cloud, 2.2)
+
+func _spawn_sparks(pos: Vector3, normal: Vector3) -> void:
+	if not _check_fx_budget(false):
+		return
+	var root := get_tree().current_scene
+	if not root:
+		return
+	var s := CPUParticles3D.new()
+	s.one_shot = true
+	s.explosiveness = 1.0
+	s.amount = 10
+	s.lifetime = 0.28
+	var q := QuadMesh.new()
+	q.size = Vector2(0.015, 0.09)
+	s.mesh = q
+	var m := _make_emissive_mat(Color(1.0, 0.72, 0.28), 6.0)
+	m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	s.material_override = m
+	s.direction = normal
+	s.spread = 55.0
+	s.initial_velocity_min = 3.5
+	s.initial_velocity_max = 7.0
+	s.gravity = Vector3(0, -12.0, 0)
+	s.particle_flag_align_y = true
+	root.add_child(s)
+	s.global_position = pos
+	s.emitting = true
+	_free_later(s, 0.5)
+
+func _free_later(node: Node, delay: float) -> void:
+	var t := node.create_tween()
+	t.tween_interval(delay)
 	t.tween_callback(func():
-		if is_instance_valid(p):
-			p.queue_free()
+		if is_instance_valid(node):
+			node.queue_free()
 	)
 
 func _spawn_shatter_shards(origin: Vector3) -> void:
@@ -724,46 +996,36 @@ func _spawn_shatter_shards(origin: Vector3) -> void:
 	if not root:
 		return
 
-	var shard_mat: StandardMaterial3D = _get_or_create_base_material(material_data) if material_data else null
-	for i in range(3):
+	var shard_mat: Material = get_structure_material(material_data)
+	for i in range(4):
+		var size: float = randf_range(0.16, 0.32)
 		var shard := RigidBody3D.new()
 		shard.collision_layer = 16
 		shard.collision_mask = 1
-		shard.mass = 2.0
+		shard.mass = 2.0 * size * 4.0
 
 		var mi := MeshInstance3D.new()
-		mi.mesh = _shard_mesh
-		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		if shard_mat:
-			mi.set_surface_override_material(0, shard_mat)
+		mi.mesh = _rock_meshes[randi() % _rock_meshes.size()]
+		mi.scale = Vector3.ONE * size
+		mi.material_override = shard_mat
+		mi.set_instance_shader_parameter(&"local_mode", 1.0)
+		mi.set_instance_shader_parameter(&"damage", 0.6)
 		shard.add_child(mi)
 
 		var cs := CollisionShape3D.new()
-		var box := BoxShape3D.new()
-		box.size = Vector3(0.22, 0.22, 0.22)
-		cs.shape = box
+		var sph := SphereShape3D.new()
+		sph.radius = size * 0.42
+		cs.shape = sph
 		shard.add_child(cs)
 
 		root.add_child(shard)
-		shard.global_position = origin + Vector3(
-			randf_range(-0.25, 0.25),
-			randf_range(-0.25, 0.25),
-			randf_range(-0.25, 0.25)
-		)
-		shard.linear_velocity = Vector3(
-			randf_range(-4.0, 4.0),
-			randf_range(1.6, 4.8),
-			randf_range(-4.0, 4.0)
-		)
-		shard.angular_velocity = Vector3(
-			randf_range(-7.0, 7.0),
-			randf_range(-7.0, 7.0),
-			randf_range(-7.0, 7.0)
-		)
+		shard.global_position = origin + Vector3(randf_range(-0.25, 0.25), randf_range(-0.25, 0.25), randf_range(-0.25, 0.25))
+		shard.linear_velocity = Vector3(randf_range(-3.5, 3.5), randf_range(1.4, 4.4), randf_range(-3.5, 3.5))
+		shard.angular_velocity = Vector3(randf_range(-7.0, 7.0), randf_range(-7.0, 7.0), randf_range(-7.0, 7.0))
 
 		var t := shard.create_tween()
-		t.tween_interval(0.80)
-		t.tween_property(shard, "scale", Vector3(0.05, 0.05, 0.05), 0.22)
+		t.tween_interval(1.4)
+		t.tween_property(mi, "scale", Vector3.ONE * size * 0.05, 0.3)
 		t.tween_callback(func():
 			if is_instance_valid(shard):
 				shard.queue_free()

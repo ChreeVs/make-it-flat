@@ -14,6 +14,10 @@ extends Control
 @onready var close_btn: Button = $Panel/VBox/FooterRow/CloseButton
 
 var _loading_ui: bool = false
+var quality_option: OptionButton = null
+
+const QUALITY_IDS: Array[String] = ["low", "medium", "high"]
+const QUALITY_LABELS: Array[String] = ["Bassa (prestazioni)", "Media", "Alta (SSIL, riflessi, nebbia volumetrica)"]
 
 func _ready() -> void:
 	visible = false
@@ -24,7 +28,27 @@ func _ready() -> void:
 	shadows_check.toggled.connect(_on_any_changed)
 	fog_check.toggled.connect(_on_any_changed)
 	reset_btn.pressed.connect(_on_reset_defaults)
+	_build_quality_row()
 	close_btn.pressed.connect(close_settings)
+
+func _build_quality_row() -> void:
+	var vbox := $Panel/VBox as VBoxContainer
+	var row := HBoxContainer.new()
+	row.name = "QualityRow"
+	var lbl := Label.new()
+	lbl.text = "Qualità Grafica:"
+	lbl.custom_minimum_size = Vector2(200, 0)
+	row.add_child(lbl)
+	quality_option = OptionButton.new()
+	quality_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for i in range(QUALITY_IDS.size()):
+		quality_option.add_item(QUALITY_LABELS[i], i)
+	quality_option.item_selected.connect(_on_any_changed)
+	row.add_child(quality_option)
+	vbox.add_child(row)
+	var footer := vbox.get_node_or_null("FooterRow")
+	if footer:
+		vbox.move_child(row, footer.get_index())
 
 func open_settings() -> void:
 	visible = true
@@ -49,6 +73,8 @@ func _sync_ui_from_save() -> void:
 	shake_check.button_pressed = bool(s.get("camera_shake", true))
 	shadows_check.button_pressed = bool(s.get("shadows_enabled", true))
 	fog_check.button_pressed = bool(s.get("fog_enabled", true))
+	if quality_option:
+		quality_option.select(maxi(QUALITY_IDS.find(String(s.get("graphics_quality", "high"))), 0))
 	_loading_ui = false
 	_update_labels()
 
@@ -67,6 +93,8 @@ func _on_any_changed(_val = null) -> void:
 	SaveManager.settings["camera_shake"] = shake_check.button_pressed
 	SaveManager.settings["shadows_enabled"] = shadows_check.button_pressed
 	SaveManager.settings["fog_enabled"] = fog_check.button_pressed
+	if quality_option:
+		SaveManager.settings["graphics_quality"] = QUALITY_IDS[clampi(quality_option.selected, 0, QUALITY_IDS.size() - 1)]
 	SaveManager.apply_settings()
 
 func _on_reset_defaults() -> void:

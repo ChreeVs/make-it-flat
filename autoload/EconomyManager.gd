@@ -71,7 +71,7 @@ const UPGRADE_TOOL_UNLOCKS: Array[Dictionary] = [
 
 var current_difficulty: String = "easy"
 var current_money: float = 0.0
-var unlocked_tier: int = 5
+var unlocked_tier: int = 1
 var equipped_tool_id: StringName = &"crowbar"
 var unlocked_tools: Array = ["crowbar"]
 var prestige_count: int = 0
@@ -134,7 +134,7 @@ func _init_skill_tree() -> void:
 	_register_upgrade(
 		&"c4_discount",
 		"Genio Esplosivista C4",
-		"★ Lv.1 SBLOCCA: C4 [6] + Detonatore [7] (T4)! Ogni livello sconta il costo C4 del -10% e aumenta il danno esplosivo del +25%.",
+		"★ Lv.1 SBLOCCA: C4 [6] + Detonatore [7] (T4)! Ogni livello aumenta il danno esplosivo del +25%; dal Lv.2 ogni livello sconta il costo C4 del -12,5% (max -50%).",
 		"POTENZA",
 		4800.0,
 		1.62,

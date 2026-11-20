@@ -14,6 +14,7 @@ var _orbit_angle: float = 0.42
 func _ready() -> void:
 	GameManager.structure_container = structure_container
 	_build_metropolitan_district()
+	_setup_environment()
 	_apply_visual_settings()
 
 	EventBus.settings_changed.connect(_apply_visual_settings)
@@ -53,11 +54,97 @@ func _sync_cameras() -> void:
 	if is_instance_valid(player) and is_instance_valid(player.camera):
 		player.camera.current = not GameManager.is_main_menu_open
 
+const HDRI_PATH := "res://assets/polyhaven/hdri/kloofendal_48d_partly_cloudy_puresky_2k.hdr"
+
+# Ambiente fotorealistico (Forward+): cielo HDR Poly Haven, tonemapping AgX, SSAO/SSIL/SSR, glow,
+# nebbia atmosferica + nebbia volumetrica leggera (polvere di cantiere).
+func _setup_environment() -> void:
+	if not is_instance_valid(world_env):
+		return
+	var env: Environment = world_env.environment
+	if env == null:
+		env = Environment.new()
+		world_env.environment = env
+
+	if ResourceLoader.exists(HDRI_PATH):
+		var pano := PanoramaSkyMaterial.new()
+		pano.panorama = load(HDRI_PATH)
+		pano.energy_multiplier = 1.0
+		var sky := Sky.new()
+		sky.sky_material = pano
+		sky.radiance_size = Sky.RADIANCE_SIZE_256
+		env.sky = sky
+	env.background_mode = Environment.BG_SKY
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
+	env.ambient_light_energy = 1.0
+	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
+
+	env.tonemap_mode = Environment.TONE_MAPPER_AGX
+	env.tonemap_exposure = 1.0
+	env.adjustment_enabled = true
+	env.adjustment_contrast = 1.06
+	env.adjustment_saturation = 1.08
+
+	env.ssao_radius = 1.4
+	env.ssao_intensity = 2.2
+	env.ssao_power = 1.6
+	env.ssao_detail = 0.6
+	env.ssil_radius = 4.0
+	env.ssil_intensity = 0.8
+	env.ssr_max_steps = 56
+	env.ssr_fade_in = 0.15
+	env.ssr_fade_out = 2.0
+	env.ssr_depth_tolerance = 0.25
+
+	env.glow_intensity = 0.55
+	env.glow_strength = 0.9
+	env.glow_bloom = 0.04
+	env.glow_hdr_threshold = 1.15
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
+
+	env.fog_mode = Environment.FOG_MODE_EXPONENTIAL
+	env.fog_light_color = Color(0.70, 0.74, 0.80)
+	env.fog_density = 0.0028
+	env.fog_sun_scatter = 0.25
+	env.fog_aerial_perspective = 0.55
+	env.fog_sky_affect = 0.25
+
+	env.volumetric_fog_density = 0.006
+	env.volumetric_fog_albedo = Color(0.86, 0.82, 0.76)
+	env.volumetric_fog_anisotropy = 0.55
+	env.volumetric_fog_length = 48.0
+	env.volumetric_fog_ambient_inject = 0.35
+	env.volumetric_fog_sky_affect = 0.0
+
+	if is_instance_valid(sun_light):
+		sun_light.light_color = Color(1.0, 0.95, 0.88)
+		sun_light.light_energy = 1.55
+		sun_light.light_angular_distance = 0.6
+		sun_light.shadow_blur = 1.2
+		sun_light.shadow_bias = 0.03
+		sun_light.shadow_normal_bias = 1.2
+		sun_light.directional_shadow_max_distance = 90.0
+		sun_light.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+		sun_light.directional_shadow_split_1 = 0.2
+		sun_light.directional_shadow_blend_splits = true
+		sun_light.light_volumetric_fog_energy = 1.2
+
 func _apply_visual_settings() -> void:
+	var quality: String = String(SaveManager.settings.get("graphics_quality", "high"))
+	var high: bool = quality == "high"
+	var low: bool = quality == "low"
 	if is_instance_valid(sun_light):
 		sun_light.shadow_enabled = bool(SaveManager.settings.get("shadows_enabled", true))
 	if is_instance_valid(world_env) and world_env.environment:
-		world_env.environment.fog_enabled = bool(SaveManager.settings.get("fog_enabled", true))
+		var env: Environment = world_env.environment
+		var fog_on: bool = bool(SaveManager.settings.get("fog_enabled", true))
+		env.fog_enabled = fog_on
+		env.volumetric_fog_enabled = fog_on and high
+		env.ssao_enabled = not low
+		env.ssil_enabled = high
+		env.ssr_enabled = high
+		env.glow_enabled = not low
+	get_viewport().msaa_3d = Viewport.MSAA_2X if not low else Viewport.MSAA_DISABLED
 
 func _load_initial_skyscraper() -> void:
 	_adjust_menu_camera_for_height()
@@ -90,25 +177,69 @@ func _add_box(parent: Node3D, size: Vector3, pos: Vector3, mat: Material, rot_de
 	parent.add_child(mi)
 	return mi
 
+const PH_MODEL := "res://assets/polyhaven/models/%s/%s_1k.gltf"
+const PH_TEX := "res://assets/polyhaven/textures/%s/%s_%s_1k.jpg"
+
+func _make_pbr(tex_id: String, tile_m: float, tint: Color = Color.WHITE) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = tint
+	m.uv1_triplanar = true
+	m.uv1_world_triplanar = true
+	m.uv1_scale = Vector3.ONE / maxf(tile_m, 0.01)
+	m.uv1_triplanar_sharpness = 4.0
+	var diff: String = PH_TEX % [tex_id, tex_id, "diff"]
+	var nor: String = PH_TEX % [tex_id, tex_id, "nor_gl"]
+	var rough: String = PH_TEX % [tex_id, tex_id, "rough"]
+	var ao: String = PH_TEX % [tex_id, tex_id, "ao"]
+	if ResourceLoader.exists(diff):
+		m.albedo_texture = load(diff)
+	if ResourceLoader.exists(nor):
+		m.normal_enabled = true
+		m.normal_texture = load(nor)
+	if ResourceLoader.exists(rough):
+		m.roughness_texture = load(rough)
+		m.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
+		m.roughness = 1.0
+	if ResourceLoader.exists(ao):
+		m.ao_enabled = true
+		m.ao_texture = load(ao)
+		m.ao_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
+	return m
+
+func _add_model(parent: Node3D, model_id: String, pos: Vector3, yaw_deg: float = 0.0, scale_f: float = 1.0) -> Node3D:
+	var path: String = PH_MODEL % [model_id, model_id]
+	if not ResourceLoader.exists(path):
+		return null
+	var inst := (load(path) as PackedScene).instantiate() as Node3D
+	inst.position = pos
+	inst.rotation_degrees = Vector3(0.0, yaw_deg, 0.0)
+	inst.scale = Vector3.ONE * scale_f
+	parent.add_child(inst)
+	return inst
+
 func _build_metropolitan_district() -> void:
 	if not is_instance_valid(scenery_root):
 		return
 
-	var mat_earth := _make_mat(Color(0.26, 0.28, 0.25), 0.96)
-	var mat_asphalt := _make_mat(Color(0.86, 0.86, 0.89), 0.90, 0.0, "res://assets/textures/tex_asphalt.png", Vector3(26, 5, 1))
-	var mat_paver := _make_mat(Color(0.92, 0.92, 0.94), 0.84, 0.0, "res://assets/textures/tex_sidewalk_paver.png", Vector3(30, 3, 1), "res://assets/textures/tex_sidewalk_paver_n.png")
+	# Superfici PBR Poly Haven (mappatura triplanare in spazio mondo: nessuna texture stirata)
+	var mat_earth := _make_pbr("concrete_floor_02", 5.0, Color(0.78, 0.78, 0.76))
+	var mat_asphalt := _make_pbr("asphalt_02", 4.0)
+	var mat_paver := _make_pbr("concrete_pavement", 2.5)
 	var mat_road_line := _make_mat(Color(0.95, 0.82, 0.24), 0.65)
 	var mat_white_line := _make_mat(Color(0.94, 0.95, 0.96), 0.72)
-	var mat_concrete := _make_mat(Color(0.78, 0.79, 0.81), 0.86, 0.0, "res://assets/textures/tex_mat_concrete.png", Vector3(2, 2, 1))
+	var mat_concrete := _make_pbr("concrete_wall_008", 2.5)
+	var yard := find_child("YardPad", true, false) as MeshInstance3D
+	if yard:
+		yard.material_override = _make_pbr("concrete_floor_02", 4.0, Color(0.74, 0.72, 0.68))
 	var mat_steel := _make_mat(Color(0.84, 0.86, 0.90), 0.34, 0.78, "res://assets/textures/tex_dark_steel.png")
-	var mat_crane_yellow := _make_mat(Color(0.96, 0.68, 0.10), 0.40, 0.32)
-	var mat_machine_orange := _make_mat(Color(0.92, 0.44, 0.10), 0.42, 0.28)
-	var mat_tire := _make_mat(Color(0.11, 0.12, 0.13), 0.94)
+	var mat_crane_yellow := _make_mat(Color(0.93, 0.62, 0.06), 0.38, 0.25)
+	var mat_machine_orange := _make_mat(Color(0.86, 0.36, 0.06), 0.40, 0.25)
+	var mat_tire := _make_pbr("asphalt_02", 0.8, Color(0.22, 0.22, 0.23))
 	var mat_container_blue := _make_mat(Color(0.82, 0.90, 0.98), 0.54, 0.35, "res://assets/textures/tex_container_metal.png", Vector3(2, 1, 1))
 	var mat_container_orange := _make_mat(Color(0.92, 0.42, 0.18), 0.54, 0.30, "res://assets/textures/tex_container_metal.png", Vector3(2, 1, 1))
 	var mat_brick := _make_mat(Color(0.92, 0.88, 0.84), 0.86, 0.0, "res://assets/textures/tex_mat_brick_dry.png")
 	var mat_hazard := _make_mat(Color(1.0, 1.0, 1.0), 0.48, 0.0, "res://assets/textures/tex_hazard_stripes.png", Vector3(3, 1, 1))
-	var mat_glass_cab := _make_mat(Color(0.55, 0.82, 0.95), 0.12, 0.5)
+	var mat_glass_cab := _make_mat(Color(0.16, 0.22, 0.26), 0.05, 0.6)
 
 	var mat_lamp := StandardMaterial3D.new()
 	mat_lamp.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -144,7 +275,13 @@ func _build_metropolitan_district() -> void:
 		[Vector3(7.0, 0.55, -13.8), Vector3.ZERO]
 	]
 	for b in barrier_coords:
-		_add_box(scenery_root, Vector3(4.2, 1.1, 0.65), b[0], mat_concrete, b[1])
+		# Ogni segmento da 4.2m = 3 barriere New Jersey in cemento (modello Poly Haven)
+		var base_pos: Vector3 = b[0]
+		var rot: Vector3 = b[1]
+		var along: Vector3 = Vector3.RIGHT.rotated(Vector3.UP, deg_to_rad(rot.y))
+		for k in range(3):
+			var bp: Vector3 = Vector3(base_pos.x, 0.0, base_pos.z) + along * (float(k) - 1.0) * 1.42
+			_add_model(scenery_root, "concrete_road_barrier", bp, rot.y + randf_range(-2.0, 2.0))
 
 	for lx in [-24.0, -10.0, 10.0, 24.0]:
 		_add_box(scenery_root, Vector3(0.18, 6.4, 0.18), Vector3(lx, 3.2, 17.5), mat_steel)
@@ -152,8 +289,9 @@ func _build_metropolitan_district() -> void:
 		_add_box(scenery_root, Vector3(0.55, 0.14, 0.85), Vector3(lx, 6.2, 19.1), mat_lamp, Vector3.ZERO, false)
 
 	for fc in [Vector3(-12.6, 0, -12.6), Vector3(12.6, 0, -12.6), Vector3(-12.6, 0, 12.6), Vector3(12.6, 0, 12.6)]:
-		_add_box(scenery_root, Vector3(0.26, 9.6, 0.26), fc + Vector3(0, 4.8, 0), mat_steel)
-		_add_box(scenery_root, Vector3(1.2, 0.44, 0.44), fc + Vector3(0, 9.7, 0), mat_lamp, Vector3(0, 45, 0), false)
+		_add_box(scenery_root, Vector3(0.22, 8.6, 0.22), fc + Vector3(0, 4.3, 0), mat_steel)
+		var yaw_to_site: float = rad_to_deg(atan2(-fc.x, -fc.z))
+		_add_model(scenery_root, "flood_lights", fc + Vector3(0, 8.4, 0), yaw_to_site, 0.42)
 
 	# 4. Quartier Generale Cantiere (Container impilati) + Escavatore & Camion Ribaltabile parcheggiati!
 	_add_box(scenery_root, Vector3(3.2, 2.8, 7.2), Vector3(-20.0, 1.4, 2.5), mat_container_blue, Vector3(0, 8, 0))
@@ -188,6 +326,14 @@ func _build_metropolitan_district() -> void:
 
 	# Pallet di materiali sul cantiere
 	_add_box(scenery_root, Vector3(2.2, 1.2, 1.6), Vector3(18.0, 0.6, 4.2), mat_brick)
+	# Materiale di cantiere: casse, barili, cartelli (modelli Poly Haven)
+	for c in [[Vector3(-17.4, 0, 6.8), 12.0], [Vector3(-17.0, 0, 7.9), -8.0], [Vector3(16.2, 0, 6.6), 30.0]]:
+		_add_model(scenery_root, "wooden_crate_01", c[0], c[1])
+	_add_model(scenery_root, "wooden_crate_01", Vector3(-17.2, 0.35, 7.3), 4.0)
+	for bpos in [Vector3(-18.6, 0, -1.6), Vector3(-18.0, 0, -2.3), Vector3(15.8, 0, 9.4), Vector3(16.4, 0, 9.9)]:
+		_add_model(scenery_root, "Barrel_01", bpos, randf_range(0.0, 360.0))
+	_add_model(scenery_root, "WetFloorSign_01", Vector3(3.2, 0.0, 12.8), 160.0)
+	_add_model(scenery_root, "WetFloorSign_01", Vector3(-3.4, 0.0, 13.1), 200.0)
 	_add_box(scenery_root, Vector3(1.4, 0.6, 5.5), Vector3(19.5, 0.3, 8.2), mat_steel, Vector3(0, -6, 0))
 
 	# 5. Grande GRU A TORRE gialla animata sullo sfondo (-X, -Z)
@@ -206,9 +352,9 @@ func _build_metropolitan_district() -> void:
 	_add_box(_crane_jib, Vector3(0.45, 0.45, 0.45), Vector3(0, 2.4, 0), mat_beacon, Vector3.ZERO, false)
 
 	# 6. SKYLINE METROPOLITANO REALISTICO A 360° (Grattacieli con facciate vetrate illuminate + antenne!)
-	var mat_city_glass := _make_mat(Color(0.92, 0.95, 1.0), 0.35, 0.35, "res://assets/textures/tex_city_facade.png", Vector3(2, 4, 1))
-	var mat_city_warm := _make_mat(Color(0.96, 0.90, 0.84), 0.45, 0.20, "res://assets/textures/tex_city_facade.png", Vector3(2, 3, 1))
-	var mat_city_dark := _make_mat(Color(0.76, 0.82, 0.90), 0.30, 0.45, "res://assets/textures/tex_city_facade.png", Vector3(3, 5, 1))
+	var mat_city_glass := _make_mat(Color(0.40, 0.46, 0.54), 0.16, 0.70, "res://assets/textures/tex_city_facade.png", Vector3(2, 4, 1))
+	var mat_city_warm := _make_mat(Color(0.58, 0.54, 0.50), 0.30, 0.45, "res://assets/textures/tex_city_facade.png", Vector3(2, 3, 1))
+	var mat_city_dark := _make_mat(Color(0.30, 0.34, 0.40), 0.12, 0.80, "res://assets/textures/tex_city_facade.png", Vector3(3, 5, 1))
 	var mat_hill := _make_mat(Color(0.24, 0.34, 0.24), 0.96)
 	var mat_foliage := _make_mat(Color(0.19, 0.42, 0.22), 0.90)
 	var mat_trunk := _make_mat(Color(0.34, 0.23, 0.15), 0.94)

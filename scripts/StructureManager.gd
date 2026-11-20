@@ -1,7 +1,7 @@
 class_name StructureManager
 extends Node3D
 
-@export var block_size: float = 0.5
+@export var block_size: float = 1.0 # passo griglia = dimensione delle forme dei blocchi (1m)
 
 var all_blocks: Array[DestructibleBlock] = []
 var active_intact_blocks: Array[DestructibleBlock] = []
@@ -21,6 +21,8 @@ var _floor_cleared: Dictionary = {}     # int -> bool
 
 var _counted_block_ids: Dictionary = {} # instance_id -> true
 var _bfs_scheduled: bool = false
+
+const XRAY_REMAINING_RATIO: float = 0.85 # outline quando resta < 15% della massa
 
 const DIRECTIONS: Array[Vector3i] = [
 	Vector3i(1, 0, 0),
@@ -180,10 +182,52 @@ func _emit_progress() -> void:
 	var threshold: float = GameManager.current_contract.completion_threshold if GameManager.current_contract else 0.88
 	if not threshold_reached and ratio >= threshold:
 		threshold_reached = true
-		_enable_xray_on_remaining()
 		EventBus.contract_threshold_reached.emit(GameManager.current_contract)
-		if GameManager.current_contract and not GameManager.contract_bonus_claimed:
+
+	# X-Ray anti pixel-hunting: solo quando resta meno del 15% della massa
+	if not xray_active and ratio >= XRAY_REMAINING_RATIO:
+		_enable_xray_on_remaining()
+
+	# Soglia raggiunta -> il giocatore incassa con [E]; a demolizione totale il premio viene accreditato in automatico
+	var fully_demolished: bool = ratio >= 0.999 or active_intact_blocks.is_empty()
+	if threshold_reached and fully_demolished and GameManager.current_contract and not GameManager.contract_bonus_claimed:
+		if GameManager.current_structure == self:
 			GameManager.complete_current_contract()
+
+# Query spaziale per danni ad area (C4, mazze): interroga la broadphase di Jolt sul layer
+# Structure_Intact invece di scorrere tutti i blocchi della torre (fino a ~2000 in Hardcore).
+func get_intact_blocks_in_radius(center: Vector3, radius: float) -> Array[DestructibleBlock]:
+	var result: Array[DestructibleBlock] = []
+	if not is_inside_tree() or radius <= 0.0:
+		return result
+	var space: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
+	if space == null:
+		return _linear_blocks_in_radius(center, radius)
+	var sphere := SphereShape3D.new()
+	sphere.radius = radius
+	var q := PhysicsShapeQueryParameters3D.new()
+	q.shape = sphere
+	q.transform = Transform3D(Basis.IDENTITY, center)
+	q.collision_mask = 4 # Layer 3: Structure_Intact
+	q.collide_with_areas = false
+	q.collide_with_bodies = true
+	var hits: Array[Dictionary] = space.intersect_shape(q, 4096)
+	var seen: Dictionary = {}
+	for h in hits:
+		var b := h.get("collider") as DestructibleBlock
+		if b == null or seen.has(b) or b.is_destroyed or not b.freeze or b.get_parent() != self:
+			continue
+		seen[b] = true
+		if b.global_position.distance_to(center) <= radius:
+			result.append(b)
+	return result
+
+func _linear_blocks_in_radius(center: Vector3, radius: float) -> Array[DestructibleBlock]:
+	var result: Array[DestructibleBlock] = []
+	for b in active_intact_blocks:
+		if is_instance_valid(b) and not b.is_destroyed and b.global_position.distance_to(center) <= radius:
+			result.append(b)
+	return result
 
 func _enable_xray_on_remaining() -> void:
 	if xray_active:

@@ -1,8 +1,16 @@
 extends Node
 
-const SAVE_PATH := "user://save_v1.json"
-const SETTINGS_PATH := "user://settings_v1.json"
+const SAVE_PATH_DEFAULT := "user://save_v1.json"
+const SETTINGS_PATH_DEFAULT := "user://settings_v1.json"
+const TEST_SAVE_PATH := "user://test_save_v1.json"
+const TEST_SETTINGS_PATH := "user://test_settings_v1.json"
 const AUTOSAVE_DELAY_SEC := 2.5
+
+# I TestRunner non devono MAI toccare il salvataggio reale del giocatore:
+# se la scena avviata è un TestRunner (da editor o da riga di comando) si usano file separati.
+var is_test_mode: bool = false
+var SAVE_PATH: String = SAVE_PATH_DEFAULT
+var SETTINGS_PATH: String = SETTINGS_PATH_DEFAULT
 
 var save_data: Dictionary = {}
 var settings: Dictionary = {}
@@ -10,11 +18,26 @@ var _dirty: bool = false
 var _autosave_timer: float = 0.0
 
 func _ready() -> void:
+	is_test_mode = _detect_test_mode()
+	if is_test_mode:
+		SAVE_PATH = TEST_SAVE_PATH
+		SETTINGS_PATH = TEST_SETTINGS_PATH
+		# Ogni esecuzione dei test parte da una carriera pulita
+		if FileAccess.file_exists(TEST_SAVE_PATH):
+			DirAccess.remove_absolute(TEST_SAVE_PATH)
 	save_data = _get_default_save()
 	settings = _get_default_settings()
 	load_game()
 	load_settings()
 	apply_settings()
+
+func _detect_test_mode() -> bool:
+	var args: PackedStringArray = OS.get_cmdline_args()
+	args.append_array(OS.get_cmdline_user_args())
+	for a in args:
+		if a == "--test-mode" or a.contains("TestRunner") or a.contains("test_sprint"):
+			return true
+	return false
 
 func _process(delta: float) -> void:
 	if _dirty:
@@ -69,7 +92,8 @@ func _get_default_settings() -> Dictionary:
 		"fov": 78.0,
 		"camera_shake": true,
 		"shadows_enabled": true,
-		"fog_enabled": true
+		"fog_enabled": true,
+		"graphics_quality": "high" # low | medium | high
 	}
 
 func has_existing_career() -> bool:
@@ -102,56 +126,69 @@ func save_game() -> void:
 	save_data["equipped_tool"] = String(save_data.get("equipped_tool", "crowbar"))
 	save_data["difficulty"] = String(save_data.get("difficulty", "easy"))
 
-	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
-	if file:
-		file.store_string(JSON.stringify(save_data, "\t"))
-		file.close()
-	else:
+	if not _write_atomic(SAVE_PATH, JSON.stringify(save_data, "\t")):
 		push_error("SaveManager: impossibile salvare la partita.")
+
+# Scrittura atomica: file temporaneo -> rinomina. Un crash a metà scrittura non corrompe il salvataggio.
+func _write_atomic(path: String, content: String) -> bool:
+	var tmp_path: String = path + ".tmp"
+	var file := FileAccess.open(tmp_path, FileAccess.WRITE)
+	if not file:
+		return false
+	file.store_string(content)
+	file.flush()
+	file.close()
+	if FileAccess.file_exists(path):
+		var bak_path: String = path + ".bak"
+		if FileAccess.file_exists(bak_path):
+			DirAccess.remove_absolute(bak_path)
+		DirAccess.rename_absolute(path, bak_path)
+	var err: Error = DirAccess.rename_absolute(tmp_path, path)
+	if err != OK:
+		# Fallback: scrittura diretta
+		var direct := FileAccess.open(path, FileAccess.WRITE)
+		if not direct:
+			return false
+		direct.store_string(content)
+		direct.close()
+		DirAccess.remove_absolute(tmp_path)
+	return true
+
+func _read_json_dict(path: String) -> Variant:
+	if not FileAccess.file_exists(path):
+		return null
+	var file := FileAccess.open(path, FileAccess.READ)
+	if not file:
+		return null
+	var parsed = JSON.parse_string(file.get_as_text())
+	file.close()
+	return parsed if typeof(parsed) == TYPE_DICTIONARY else null
 
 func load_game() -> void:
 	var defaults := _get_default_save()
-	if not FileAccess.file_exists(SAVE_PATH):
+	var parsed = _read_json_dict(SAVE_PATH)
+	if parsed == null:
+		# Salvataggio mancante o corrotto: prova la copia di backup
+		parsed = _read_json_dict(SAVE_PATH + ".bak")
+	if parsed == null:
 		save_data = defaults
 		return
-
-	var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
-	if not file:
-		save_data = defaults
-		return
-
-	var parsed = JSON.parse_string(file.get_as_text())
-	file.close()
-	if typeof(parsed) == TYPE_DICTIONARY:
-		save_data = _deep_merge(defaults, parsed)
-		var upg: Dictionary = save_data.get("upgrades", {})
-		if upg.has("auto_salvage"):
-			upg.erase("auto_salvage")
-	else:
-		save_data = defaults
+	save_data = _deep_merge(defaults, parsed)
+	var upg: Dictionary = save_data.get("upgrades", {})
+	if upg.has("auto_salvage"):
+		upg.erase("auto_salvage")
 
 func save_settings() -> void:
-	var file := FileAccess.open(SETTINGS_PATH, FileAccess.WRITE)
-	if file:
-		file.store_string(JSON.stringify(settings, "\t"))
-		file.close()
+	if not _write_atomic(SETTINGS_PATH, JSON.stringify(settings, "\t")):
+		push_error("SaveManager: impossibile salvare le impostazioni.")
 	apply_settings()
 
 func load_settings() -> void:
 	var defaults := _get_default_settings()
-	if not FileAccess.file_exists(SETTINGS_PATH):
-		settings = defaults
-		return
-	var file := FileAccess.open(SETTINGS_PATH, FileAccess.READ)
-	if not file:
-		settings = defaults
-		return
-	var parsed = JSON.parse_string(file.get_as_text())
-	file.close()
-	if typeof(parsed) == TYPE_DICTIONARY:
-		settings = _deep_merge(defaults, parsed)
-	else:
-		settings = defaults
+	var parsed = _read_json_dict(SETTINGS_PATH)
+	if parsed == null:
+		parsed = _read_json_dict(SETTINGS_PATH + ".bak")
+	settings = _deep_merge(defaults, parsed) if parsed != null else defaults
 
 func apply_settings() -> void:
 	var vol: float = clampf(float(settings.get("master_volume", 0.85)), 0.0, 1.0)
@@ -172,7 +209,7 @@ func reset_career_save(difficulty_id: String = "") -> void:
 
 func reset_save_for_prestige(new_prestige_count: int, new_multiplier: float) -> void:
 	var old_stats: Dictionary = save_data.get("stats", {}).duplicate(true)
-	var keep_diff: String = String(save_data.get("difficulty", "normal"))
+	var keep_diff: String = String(save_data.get("difficulty", "easy"))
 	save_data = _get_default_save()
 	save_data["difficulty"] = keep_diff
 	save_data["has_seen_intro"] = true

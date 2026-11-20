@@ -1,7 +1,10 @@
-[gd_resource type="Resource" script_class="MaterialData" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="MaterialData" load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/resources/MaterialData.gd" id="1_script"]
-[ext_resource type="Texture2D" path="res://assets/textures/tex_mat_marble.png" id="2_albedo"]
+[ext_resource type="Texture2D" path="res://assets/polyhaven/textures/marble_01/marble_01_diff_1k.jpg" id="2_diff"]
+[ext_resource type="Texture2D" path="res://assets/polyhaven/textures/marble_01/marble_01_nor_gl_1k.jpg" id="3_nor_gl"]
+[ext_resource type="Texture2D" path="res://assets/polyhaven/textures/marble_01/marble_01_rough_1k.jpg" id="4_rough"]
+[ext_resource type="Texture2D" path="res://assets/polyhaven/textures/marble_01/marble_01_ao_1k.jpg" id="5_ao"]
 
 [resource]
 script = ExtResource("1_script")
@@ -12,9 +15,14 @@ max_hp = 155.0
 mass_kg = 78.0
 base_money_value = 68.0
 is_composite = false
-color = Color(0.96, 0.95, 0.92, 1.0)
+color = Color(1, 1, 1, 1.0)
 dust_color = Color(0.84, 0.83, 0.80, 1.0)
-albedo_texture = ExtResource("2_albedo")
+albedo_texture = ExtResource("2_diff")
+normal_texture = ExtResource("3_nor_gl")
+roughness_texture = ExtResource("4_rough")
+ao_texture = ExtResource("5_ao")
 roughness = 0.28
 metallic = 0.08
-uv_scale = Vector3(1.0, 1.0, 1.0)
+texture_world_size = 2.0
+grime_amount = 0.05
+uv_scale = Vector3(1, 1, 1)

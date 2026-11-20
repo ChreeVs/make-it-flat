@@ -8,11 +8,45 @@ extends Node3D
 var _detonated: bool = false
 var _blink_time: float = 0.0
 
+# Blocco su cui è incollata la carica. La carica NON è figlia del blocco (altrimenti verrebbe
+# cancellata insieme a lui): se il supporto viene distrutto o crolla, la carica detona per simpatia.
+var host_block: DestructibleBlock = null
+var _host_local_offset: Transform3D = Transform3D.IDENTITY
+var _has_host: bool = false
+
 @onready var led_light: OmniLight3D = $OmniLight3D
+
+func _ready() -> void:
+	# Unica fonte di verità: i valori della risorsa ToolData (gli stessi mostrati in HUD/Shop)
+	var td: ToolData = EconomyManager.get_tool_data(&"c4_charge")
+	if td:
+		base_blast_damage = td.base_damage
+		blast_radius = td.aoe_radius
+		blast_penetration = td.hardness_penetration
+
+func attach_to_block(block: DestructibleBlock) -> void:
+	host_block = block
+	_has_host = is_instance_valid(block)
+	if _has_host:
+		_host_local_offset = block.global_transform.affine_inverse() * global_transform
 
 func _process(delta: float) -> void:
 	if _detonated:
 		return
+	# Nota: un riferimento a un oggetto liberato risulta "== null" in Godot 4, quindi si usa un flag dedicato
+	if _has_host:
+		if not is_instance_valid(host_block) or host_block.is_destroyed:
+			_has_host = false
+			host_block = null
+			call_deferred("detonate")
+			return
+		if not host_block.freeze:
+			# Il supporto è diventato maceria dinamica: segue il blocco e detona
+			global_transform = host_block.global_transform * _host_local_offset
+			_has_host = false
+			host_block = null
+			call_deferred("detonate")
+			return
 	_blink_time += delta
 	if is_instance_valid(led_light):
 		var pulse: float = 0.5 + 0.5 * sin(_blink_time * 10.0)
@@ -22,6 +56,7 @@ func detonate() -> void:
 	if _detonated:
 		return
 	_detonated = true
+	GameManager.unregister_explosive(self)
 
 	var origin: Vector3 = global_position
 	var effective_radius: float = blast_radius * EconomyManager.get_aoe_radius_multiplier()
@@ -32,7 +67,7 @@ func detonate() -> void:
 
 	var sm := GameManager.current_structure as StructureManager
 	if is_instance_valid(sm):
-		var snapshot: Array[DestructibleBlock] = sm.active_intact_blocks.duplicate()
+		var snapshot: Array[DestructibleBlock] = sm.get_intact_blocks_in_radius(origin, effective_radius)
 		for b in snapshot:
 			if not is_instance_valid(b) or b.is_destroyed:
 				continue

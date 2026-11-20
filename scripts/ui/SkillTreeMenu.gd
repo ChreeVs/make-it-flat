@@ -254,9 +254,10 @@ func _refresh_detail_panel() -> void:
 	var next_pct: float = float(mini(lvl + 1, max_lvl)) * float(def["effect"]) * 100.0
 	var bonus_lines: String = ""
 	if _selected_id == &"c4_discount":
-		bonus_lines = "Costo C4 attuale: €%d/carica  (Sconto -%.0f%% • Danno C4 +%.0f%%)" % [
+		var disc_pct: float = clampf(float(maxi(lvl - 1, 0)) * 12.5, 0.0, 50.0)
+		bonus_lines = "Costo C4 attuale: €%d/carica  (Sconto -%.1f%% • Danno C4 +%.0f%%)" % [
 			int(EconomyManager.get_c4_unit_cost()),
-			cur_pct,
+			disc_pct,
 			float(lvl) * 25.0
 		]
 	elif lvl >= max_lvl:
