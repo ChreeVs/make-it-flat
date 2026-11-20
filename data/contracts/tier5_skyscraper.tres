@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ContractData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ContractData.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://scenes/structures/tier_5/Skyscraper_Structure.tscn" id="2_scene"]
+
+[resource]
+script = ExtResource("1_script")
+contract_id = &"tier5_skyscraper"
+tier = 5
+title = "Megastruttura: Grattacielo Skyline"
+description = "L'apice della carriera da demolitore. Abbatti la megastruttura per sbloccare la vendita dell'impresa ed eseguire il Prestigio!"
+structure_scene = ExtResource("2_scene")
+completion_threshold = 0.88
+completion_bonus = 25000.0
+required_capital = 0.0

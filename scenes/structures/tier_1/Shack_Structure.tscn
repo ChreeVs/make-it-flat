@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ShackBuilder.gd" id="1_shack"]
+
+[node name="Shack_Structure" type="Node3D"]
+script = ExtResource("1_shack")
+shack_width = 4
+shack_depth = 4
+shack_height = 3

@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="MaterialData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/MaterialData.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+material_id = &"wood_rotten"
+display_name = "Legno Marcio"
+hardness_tier = 1
+max_hp = 45.0
+mass_kg = 15.0
+base_money_value = 8.0
+is_composite = false
+color = Color(0.48, 0.35, 0.22, 1.0)
+dust_color = Color(0.60, 0.50, 0.35, 1.0)

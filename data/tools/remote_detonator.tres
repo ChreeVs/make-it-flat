@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ToolData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ToolData.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+tool_id = &"remote_detonator"
+display_name = "Detonatore Remoto a Catena"
+unlock_cost = 1200.0
+required_tier = 3
+base_damage = 0.0
+hardness_penetration = 5
+attack_cooldown = 1.0
+reach_distance = 100.0
+aoe_radius = 0.0
+behavior_type = 3
+impact_impulse = 0.0
+swing_duration = 0.2
+tool_color = Color(0.85, 0.15, 0.15, 1.0)

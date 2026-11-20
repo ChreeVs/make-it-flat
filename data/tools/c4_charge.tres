@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ToolData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ToolData.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+tool_id = &"c4_charge"
+display_name = "Carica C4 da Cantiere"
+unlock_cost = 3200.0
+required_tier = 3
+base_damage = 900.0
+hardness_penetration = 4
+attack_cooldown = 0.4
+reach_distance = 4.5
+aoe_radius = 3.5
+behavior_type = 2
+impact_impulse = 1200.0
+swing_duration = 0.15
+tool_color = Color(0.25, 0.45, 0.25, 1.0)

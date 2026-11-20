@@ -1,0 +1,46 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/textures/tex_detonator.png" id="1_tex"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_body"]
+albedo_texture = ExtResource("1_tex")
+roughness = 0.6
+uv1_scale = Vector3(1, 2, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_red_btn"]
+albedo_color = Color(0.9, 0.15, 0.1, 1)
+roughness = 0.3
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_antenna"]
+albedo_color = Color(0.75, 0.75, 0.8, 1)
+metallic = 0.95
+roughness = 0.2
+
+[sub_resource type="BoxMesh" id="BoxMesh_case"]
+size = Vector3(0.12, 0.22, 0.06)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_btn"]
+top_radius = 0.025
+bottom_radius = 0.025
+height = 0.03
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_antenna"]
+top_radius = 0.005
+bottom_radius = 0.008
+height = 0.26
+
+[node name="RemoteDetonatorModel" type="Node3D"]
+
+[node name="Case" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_case")
+surface_material_override/0 = SubResource("StandardMaterial3D_body")
+
+[node name="Button" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, -1, 0, 1, -4.37114e-08, 0, 0.04, 0.035)
+mesh = SubResource("CylinderMesh_btn")
+surface_material_override/0 = SubResource("StandardMaterial3D_red_btn")
+
+[node name="Antenna" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.04, 0.22, 0)
+mesh = SubResource("CylinderMesh_antenna")
+surface_material_override/0 = SubResource("StandardMaterial3D_antenna")

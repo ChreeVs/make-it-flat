@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="MaterialData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/MaterialData.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+material_id = &"wood_plank"
+display_name = "Asse in Legno"
+hardness_tier = 1
+max_hp = 80.0
+mass_kg = 25.0
+base_money_value = 14.0
+is_composite = false
+color = Color(0.65, 0.45, 0.25, 1.0)
+dust_color = Color(0.75, 0.62, 0.45, 1.0)

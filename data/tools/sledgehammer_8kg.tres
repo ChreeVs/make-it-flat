@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ToolData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ToolData.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+tool_id = &"sledgehammer_8kg"
+display_name = "Mazza Pesante Demolitrice (8kg)"
+unlock_cost = 950.0
+required_tier = 2
+base_damage = 260.0
+hardness_penetration = 2
+attack_cooldown = 0.85
+reach_distance = 3.8
+aoe_radius = 1.3
+behavior_type = 0
+impact_impulse = 500.0
+swing_duration = 0.28
+tool_color = Color(0.20, 0.20, 0.22, 1.0)

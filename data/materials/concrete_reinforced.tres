@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="MaterialData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/MaterialData.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+material_id = &"concrete_reinforced"
+display_name = "Cemento Armato"
+hardness_tier = 3
+max_hp = 500.0
+mass_kg = 80.0
+base_money_value = 110.0
+is_composite = true
+color = Color(0.55, 0.55, 0.58, 1.0)
+dust_color = Color(0.70, 0.70, 0.72, 1.0)

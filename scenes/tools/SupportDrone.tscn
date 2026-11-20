@@ -1,0 +1,28 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/SupportDrone.gd" id="1_drone"]
+
+[sub_resource type="SphereMesh" id="SphereMesh_drone"]
+radius = 0.4
+height = 0.5
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_drone"]
+albedo_color = Color(0.2, 0.5, 0.9, 1)
+metallic = 0.9
+roughness = 0.2
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_laser"]
+top_radius = 0.04
+bottom_radius = 0.04
+height = 1.0
+
+[node name="SupportDrone" type="Node3D" groups=["support_drone"]]
+script = ExtResource("1_drone")
+
+[node name="DroneBody" type="MeshInstance3D" parent="."]
+mesh = SubResource("SphereMesh_drone")
+surface_material_override/0 = SubResource("StandardMaterial3D_drone")
+
+[node name="LaserBeam" type="MeshInstance3D" parent="."]
+visible = false
+mesh = SubResource("CylinderMesh_laser")

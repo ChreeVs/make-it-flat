@@ -1,0 +1,52 @@
+[gd_scene load_steps=9 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/textures/tex_demolisher_body.png" id="1_body"]
+[ext_resource type="Texture2D" path="res://assets/textures/tex_dark_steel.png" id="2_steel"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_body"]
+albedo_texture = ExtResource("1_body")
+roughness = 0.4
+uv1_scale = Vector3(2, 2, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_steel"]
+albedo_texture = ExtResource("2_steel")
+metallic = 0.95
+roughness = 0.25
+
+[sub_resource type="BoxMesh" id="BoxMesh_body"]
+size = Vector3(0.18, 0.22, 0.32)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_barrel"]
+top_radius = 0.05
+bottom_radius = 0.06
+height = 0.25
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_chisel"]
+top_radius = 0.005
+bottom_radius = 0.025
+height = 0.35
+
+[sub_resource type="BoxMesh" id="BoxMesh_handle"]
+size = Vector3(0.32, 0.04, 0.04)
+
+[node name="ElectricDemolisherModel" type="Node3D"]
+
+[node name="Body" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.2)
+mesh = SubResource("BoxMesh_body")
+surface_material_override/0 = SubResource("StandardMaterial3D_body")
+
+[node name="PneumaticBarrel" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, -1, 0, 1, -4.37114e-08, 0, 0, -0.45)
+mesh = SubResource("CylinderMesh_barrel")
+surface_material_override/0 = SubResource("StandardMaterial3D_steel")
+
+[node name="ChiselBit" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, -1, 0, 1, -4.37114e-08, 0, 0, -0.7)
+mesh = SubResource("CylinderMesh_chisel")
+surface_material_override/0 = SubResource("StandardMaterial3D_steel")
+
+[node name="RearHandle" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.06, -0.02)
+mesh = SubResource("BoxMesh_handle")
+surface_material_override/0 = SubResource("StandardMaterial3D_steel")

@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/GarageBuilder.gd" id="1_garage"]
+
+[node name="Garage_Structure" type="Node3D"]
+script = ExtResource("1_garage")
+garage_width = 6
+garage_depth = 6
+garage_height = 4

@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ContractData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ContractData.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://scenes/structures/Wall_10x5_Test.tscn" id="2_scene"]
+
+[resource]
+script = ExtResource("1_script")
+contract_id = &"tier1_wall"
+tier = 1
+title = "Muro di Cinta su Pilastri"
+description = "Una grande parete in mattoni e legno sostenuta da soli due pilastri portanti."
+structure_scene = ExtResource("2_scene")
+completion_threshold = 0.88
+completion_bonus = 600.0
+required_capital = 0.0

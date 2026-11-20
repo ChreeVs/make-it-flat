@@ -1,0 +1,40 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/textures/tex_painted_metal.png" id="1_tex"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_crowbar"]
+albedo_texture = ExtResource("1_tex")
+metallic = 0.8
+roughness = 0.35
+uv1_scale = Vector3(2, 4, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_shaft"]
+size = Vector3(0.045, 0.045, 0.6)
+
+[sub_resource type="BoxMesh" id="BoxMesh_hook1"]
+size = Vector3(0.042, 0.042, 0.12)
+
+[sub_resource type="BoxMesh" id="BoxMesh_hook2"]
+size = Vector3(0.05, 0.015, 0.08)
+
+[node name="CrowbarModel" type="Node3D"]
+
+[node name="Shaft" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.15)
+mesh = SubResource("BoxMesh_shaft")
+surface_material_override/0 = SubResource("StandardMaterial3D_crowbar")
+
+[node name="Hook_Bend" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.707107, -0.707107, 0, 0.707107, 0.707107, 0, 0.045, -0.48)
+mesh = SubResource("BoxMesh_hook1")
+surface_material_override/0 = SubResource("StandardMaterial3D_crowbar")
+
+[node name="Hook_Claw" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.173648, -0.984808, 0, 0.984808, 0.173648, 0, 0.1, -0.52)
+mesh = SubResource("BoxMesh_hook2")
+surface_material_override/0 = SubResource("StandardMaterial3D_crowbar")
+
+[node name="Chisel_End" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.16)
+mesh = SubResource("BoxMesh_hook2")
+surface_material_override/0 = SubResource("StandardMaterial3D_crowbar")

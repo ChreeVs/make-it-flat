@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ToolData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ToolData.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+tool_id = &"electric_demolisher"
+display_name = "Demolitore Elettrico"
+unlock_cost = 1600.0
+required_tier = 2
+base_damage = 45.0
+hardness_penetration = 2
+attack_cooldown = 0.10
+reach_distance = 3.6
+aoe_radius = 0.0
+behavior_type = 1
+impact_impulse = 80.0
+swing_duration = 0.08
+tool_color = Color(0.95, 0.75, 0.15, 1.0)

@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ToolData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ToolData.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+tool_id = &"sledgehammer_3kg"
+display_name = "Mazza da Cantiere (3kg)"
+unlock_cost = 350.0
+required_tier = 1
+base_damage = 120.0
+hardness_penetration = 1
+attack_cooldown = 0.58
+reach_distance = 3.6
+aoe_radius = 0.8
+behavior_type = 0
+impact_impulse = 280.0
+swing_duration = 0.22
+tool_color = Color(0.30, 0.30, 0.35, 1.0)

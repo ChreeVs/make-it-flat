@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="MaterialData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/MaterialData.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+material_id = &"brick_hollow"
+display_name = "Mattone Forato"
+hardness_tier = 2
+max_hp = 220.0
+mass_kg = 30.0
+base_money_value = 45.0
+is_composite = false
+color = Color(0.85, 0.45, 0.20, 1.0)
+dust_color = Color(0.90, 0.55, 0.35, 1.0)

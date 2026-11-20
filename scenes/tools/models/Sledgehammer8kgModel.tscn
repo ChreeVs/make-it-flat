@@ -1,0 +1,43 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/textures/tex_hazard_stripes.png" id="1_hazard"]
+[ext_resource type="Texture2D" path="res://assets/textures/tex_dark_steel.png" id="2_steel"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_handle"]
+albedo_color = Color(0.12, 0.12, 0.14, 1)
+roughness = 0.8
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_head"]
+albedo_texture = ExtResource("2_steel")
+metallic = 0.95
+roughness = 0.3
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_hazard"]
+albedo_texture = ExtResource("1_hazard")
+roughness = 0.4
+uv1_scale = Vector3(2, 2, 1)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_shaft"]
+top_radius = 0.03
+bottom_radius = 0.035
+height = 0.85
+
+[sub_resource type="BoxMesh" id="BoxMesh_head"]
+size = Vector3(0.13, 0.13, 0.28)
+
+[node name="Sledgehammer8kgModel" type="Node3D"]
+
+[node name="Shaft" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.258819, 0.965926, 0, -0.965926, 0.258819, 0, -0.12, -0.25)
+mesh = SubResource("CylinderMesh_shaft")
+surface_material_override/0 = SubResource("StandardMaterial3D_handle")
+
+[node name="SledgeHead" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.28, -0.62)
+mesh = SubResource("BoxMesh_head")
+surface_material_override/0 = SubResource("StandardMaterial3D_head")
+
+[node name="HazardStripePlate" type="MeshInstance3D" parent="SledgeHead"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("BoxMesh_head")
+surface_material_override/0 = SubResource("StandardMaterial3D_hazard")

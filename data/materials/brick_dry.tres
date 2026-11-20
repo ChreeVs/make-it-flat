@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="MaterialData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/MaterialData.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+material_id = &"brick_dry"
+display_name = "Mattone Secco"
+hardness_tier = 1
+max_hp = 130.0
+mass_kg = 35.0
+base_money_value = 22.0
+is_composite = false
+color = Color(0.72, 0.32, 0.22, 1.0)
+dust_color = Color(0.80, 0.45, 0.35, 1.0)

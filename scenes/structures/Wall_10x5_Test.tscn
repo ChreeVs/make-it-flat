@@ -1,0 +1,14 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/ModularStructureBuilder.gd" id="1_builder"]
+[ext_resource type="Resource" path="res://data/materials/wood_plank.tres" id="2_wood"]
+[ext_resource type="Resource" path="res://data/materials/brick_dry.tres" id="3_brick"]
+
+[node name="Wall_10x5_Test" type="Node3D"]
+script = ExtResource("1_builder")
+wall_width = 10
+wall_height = 5
+left_pillar_x = 2
+right_pillar_x = 7
+default_material = ExtResource("2_wood")
+pillar_material = ExtResource("3_brick")
