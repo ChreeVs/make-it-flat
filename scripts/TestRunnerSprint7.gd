@@ -63,7 +63,7 @@ func _run_test() -> void:
 		assert(block_count >= int(spec["min_blocks"]), "Blocchi insufficienti (%d) in %s" % [block_count, spec["id"]])
 		assert(anchored_count >= 4, "Ancoraggi insufficienti (%d) in %s" % [anchored_count, spec["id"]])
 		assert(stair_count >= int(spec["floors"]) * 4, "Scale interne insufficienti (%d) in %s" % [stair_count, spec["id"]])
-		assert(furniture_count >= 120, "Arredi interni insufficienti (%d) in %s" % [furniture_count, spec["id"]])
+		assert(furniture_count >= int(spec["floors"]) * 18, "Arredi interni insufficienti (%d) in %s" % [furniture_count, spec["id"]])
 		assert(has_toilet and has_bar and has_desk and has_bed, "Arredi chiave (WC/Bar/Ufficio/Appartamento) mancanti in %s!" % spec["id"])
 
 		print("[OK] Grattacielo %s (%d piani): %d blocchi | %d arredi | %d scale | %d ancorati" % [

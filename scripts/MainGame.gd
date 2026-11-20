@@ -86,7 +86,7 @@ func _add_box(parent: Node3D, size: Vector3, pos: Vector3, mat: Material, rot_de
 	mi.position = pos
 	mi.rotation_degrees = rot_deg
 	mi.set_surface_override_material(0, mat)
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadows else GeometryInstance3D.SHADOW_CASTING_OFF
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadows else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	parent.add_child(mi)
 	return mi
 
