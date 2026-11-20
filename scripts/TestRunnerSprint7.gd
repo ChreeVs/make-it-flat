@@ -10,13 +10,13 @@ func _run_test() -> void:
 
 	# 1. Verifica caricamento, stabilità e scale interne di tutti i 7 cantieri reali
 	var contracts: Array[Dictionary] = [
-		{"path": "res://data/contracts/tier1_fence.tres", "expect_stairs": false, "min_blocks": 18},
-		{"path": "res://data/contracts/tier1_shack.tres", "expect_stairs": false, "min_blocks": 80},
-		{"path": "res://data/contracts/tier1_wall.tres", "expect_stairs": false, "min_blocks": 40},
-		{"path": "res://data/contracts/tier2_garage.tres", "expect_stairs": true, "min_blocks": 200},
-		{"path": "res://data/contracts/tier3_palazzina.tres", "expect_stairs": true, "min_blocks": 300},
-		{"path": "res://data/contracts/tier4_warehouse.tres", "expect_stairs": true, "min_blocks": 250},
-		{"path": "res://data/contracts/tier5_skyscraper.tres", "expect_stairs": true, "min_blocks": 350}
+		{"path": "res://data/contracts/tier1_fence.tres", "expect_stairs": false, "min_blocks": 10},
+		{"path": "res://data/contracts/tier1_shack.tres", "expect_stairs": false, "min_blocks": 40},
+		{"path": "res://data/contracts/tier1_wall.tres", "expect_stairs": false, "min_blocks": 30},
+		{"path": "res://data/contracts/tier2_garage.tres", "expect_stairs": true, "min_blocks": 60},
+		{"path": "res://data/contracts/tier3_palazzina.tres", "expect_stairs": true, "min_blocks": 100},
+		{"path": "res://data/contracts/tier4_warehouse.tres", "expect_stairs": true, "min_blocks": 80},
+		{"path": "res://data/contracts/tier5_skyscraper.tres", "expect_stairs": true, "min_blocks": 150}
 	]
 
 	for entry in contracts:

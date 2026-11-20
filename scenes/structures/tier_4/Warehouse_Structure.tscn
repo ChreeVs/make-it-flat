@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/WarehouseBuilder.gd" id="1_wh"]
+
+[node name="Warehouse_Structure" type="Node3D"]
+script = ExtResource("1_wh")
+warehouse_width = 12
+warehouse_depth = 10
+warehouse_height = 7
