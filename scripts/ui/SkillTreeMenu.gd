@@ -14,7 +14,7 @@ extends Control
 @onready var prereq_label: Label = $Panel/Margin/VBox/Body/DetailPanel/DetailVBox/PrereqLabel
 @onready var buy_button: Button = $Panel/Margin/VBox/Body/DetailPanel/DetailVBox/BuyButton
 
-const NODE_SIZE := Vector2(186.0, 64.0)
+const NODE_SIZE := Vector2(196.0, 74.0)
 
 const BRANCH_COLORS: Dictionary = {
 	"RADICE": Color(0.98, 0.74, 0.18),
@@ -34,6 +34,11 @@ var _style_selected: StyleBoxFlat
 func _ready() -> void:
 	visible = false
 	_init_styles()
+	close_button.focus_mode = Control.FOCUS_NONE
+	shop_switch_btn.focus_mode = Control.FOCUS_NONE
+	buy_button.focus_mode = Control.FOCUS_NONE
+	shop_switch_btn.text = "Arsenale [B]"
+
 	close_button.pressed.connect(close_menu)
 	buy_button.pressed.connect(_on_buy_pressed)
 	shop_switch_btn.pressed.connect(_on_switch_to_shop)
@@ -42,6 +47,7 @@ func _ready() -> void:
 
 	EventBus.currency_changed.connect(func(_a, _d): if visible: refresh_tree())
 	EventBus.upgrade_purchased.connect(func(_id, _lvl, _cost): if visible: refresh_tree())
+	EventBus.difficulty_changed.connect(func(_d): if visible: refresh_tree())
 
 	_create_node_buttons()
 
@@ -82,15 +88,6 @@ func _init_styles() -> void:
 	_style_selected.border_color = Color(0.98, 0.74, 0.18, 1.0)
 	_style_selected.set_corner_radius_all(7)
 
-func _unhandled_input(event: InputEvent) -> void:
-	if GameManager.is_main_menu_open or GameManager.is_pause_menu_open:
-		return
-	if event.is_action_pressed("toggle_skills"):
-		if visible:
-			close_menu()
-		else:
-			open_menu()
-
 func open_menu() -> void:
 	GameManager.close_gameplay_overlays("SkillTreeMenu")
 	visible = true
@@ -121,8 +118,8 @@ func _create_node_buttons() -> void:
 
 	# Intestazioni di ramo fisse in alto alle 3 colonne
 	var col_headers := [
-		["POTENZA & C4", 0.18, Color(0.98, 0.45, 0.28)],
-		["ECONOMIA & FISICA", 0.50, Color(0.32, 0.92, 0.50)],
+		["ARSENALE & C4", 0.18, Color(0.98, 0.45, 0.28)],
+		["ECONOMIA & CROLLI", 0.50, Color(0.32, 0.92, 0.50)],
 		["MOBILITÀ & DRONE", 0.82, Color(0.35, 0.78, 1.0)]
 	]
 	for ch in col_headers:
@@ -140,7 +137,8 @@ func _create_node_buttons() -> void:
 		btn.custom_minimum_size = NODE_SIZE
 		btn.size = NODE_SIZE
 		btn.clip_text = true
-		btn.add_theme_font_size_override("font_size", 12)
+		btn.focus_mode = Control.FOCUS_NONE
+		btn.add_theme_font_size_override("font_size", 11)
 		btn.pressed.connect(func():
 			_selected_id = up_id
 			EventBus.ui_click.emit()
@@ -158,7 +156,7 @@ func _layout_nodes() -> void:
 		if child is Label and child.has_meta("col_x"):
 			var cx: float = float(child.get_meta("col_x")) * sz.x
 			child.size = Vector2(180.0, 20.0)
-			child.position = Vector2(cx - 90.0, sz.y * 0.26)
+			child.position = Vector2(cx - 90.0, sz.y * 0.245)
 
 	for up_id in _node_buttons.keys():
 		var def: Dictionary = EconomyManager.upgrade_registry[up_id]
@@ -181,7 +179,7 @@ func _on_canvas_draw() -> void:
 		if parent_id == &"" or not EconomyManager.upgrade_registry.has(parent_id):
 			continue
 
-		var p_rel: Vector2 = EconomyManager.upgrade_registry[parent_id].get("tree_pos", Vector2(0.5, 0.15))
+		var p_rel: Vector2 = EconomyManager.upgrade_registry[parent_id].get("tree_pos", Vector2(0.5, 0.13))
 		var c_rel: Vector2 = def.get("tree_pos", Vector2(0.5, 0.5))
 		var p_pos := Vector2(p_rel.x * sz.x, p_rel.y * sz.y)
 		var c_pos := Vector2(c_rel.x * sz.x, c_rel.y * sz.y)
@@ -197,14 +195,14 @@ func _on_canvas_draw() -> void:
 			line_col = Color(0.96, 0.72, 0.18, 0.90)
 			width = 3.0
 
-		# Connessione ortogonale elegante ad angoli netti
 		var mid_y: float = (p_pos.y + c_pos.y) * 0.5
 		tree_canvas.draw_line(p_pos, Vector2(p_pos.x, mid_y), line_col, width, true)
 		tree_canvas.draw_line(Vector2(p_pos.x, mid_y), Vector2(c_pos.x, mid_y), line_col, width, true)
 		tree_canvas.draw_line(Vector2(c_pos.x, mid_y), c_pos, line_col, width, true)
 
 func refresh_tree() -> void:
-	money_label.text = "Capitale: € %d" % int(EconomyManager.current_money)
+	var cfg: Dictionary = EconomyManager.get_difficulty_config()
+	money_label.text = "Capitale: € %d  (%s)" % [int(EconomyManager.current_money), String(cfg.get("label", "FACILE"))]
 
 	for up_id in _node_buttons.keys():
 		var btn: Button = _node_buttons[up_id]
@@ -213,9 +211,13 @@ func refresh_tree() -> void:
 		var max_lvl: int = int(def["max_level"])
 		var prereq_ok: bool = EconomyManager.is_skill_prereq_met(up_id)
 		var cost: int = int(EconomyManager.get_upgrade_cost(up_id))
+		var badge: String = String(def.get("unlock_badge", ""))
 
 		var sub_str: String = "MAX" if lvl >= max_lvl else ("€ %d" % cost if prereq_ok else "BLOCCATO")
-		btn.text = "%s\nLiv. %d/%d  •  %s" % [def["title"], lvl, max_lvl, sub_str]
+		if badge != "":
+			btn.text = "%s\n★ %s\nLiv. %d/%d  •  %s" % [def["title"], badge, lvl, max_lvl, sub_str]
+		else:
+			btn.text = "%s\nLiv. %d/%d  •  %s" % [def["title"], lvl, max_lvl, sub_str]
 
 		var style: StyleBoxFlat = _style_locked
 		if up_id == _selected_id:
@@ -240,6 +242,7 @@ func _refresh_detail_panel() -> void:
 	var cost: float = EconomyManager.get_upgrade_cost(_selected_id)
 	var prereq_ok: bool = EconomyManager.is_skill_prereq_met(_selected_id)
 	var cat: String = String(def.get("category", "ABILITA"))
+	var badge: String = String(def.get("unlock_badge", ""))
 
 	branch_tag.text = "RAMO %s" % cat
 	branch_tag.add_theme_color_override("font_color", BRANCH_COLORS.get(cat, Color.WHITE))
@@ -249,16 +252,21 @@ func _refresh_detail_panel() -> void:
 
 	var cur_pct: float = float(lvl) * float(def["effect"]) * 100.0
 	var next_pct: float = float(mini(lvl + 1, max_lvl)) * float(def["effect"]) * 100.0
+	var bonus_lines: String = ""
 	if _selected_id == &"c4_discount":
-		bonus_box.text = "Costo C4 attuale: €%d/carica  (Sconto -%.0f%% • Danno C4 +%.0f%%)" % [
+		bonus_lines = "Costo C4 attuale: €%d/carica  (Sconto -%.0f%% • Danno C4 +%.0f%%)" % [
 			int(EconomyManager.get_c4_unit_cost()),
 			cur_pct,
-			float(lvl) * 20.0
+			float(lvl) * 25.0
 		]
 	elif lvl >= max_lvl:
-		bonus_box.text = "Bonus Massimo Raggiunto: +%.0f%%" % cur_pct
+		bonus_lines = "Bonus Massimo Raggiunto: +%.0f%%" % cur_pct
 	else:
-		bonus_box.text = "Bonus Attuale: +%.0f%%  →  Prossimo: +%.0f%%" % [cur_pct, next_pct]
+		bonus_lines = "Bonus Attuale: +%.0f%%  →  Prossimo: +%.0f%%" % [cur_pct, next_pct]
+
+	if badge != "":
+		bonus_lines += "\n★ Sblocco: %s" % badge
+	bonus_box.text = bonus_lines
 
 	if not prereq_ok:
 		var p_id: StringName = def["parent_id"]

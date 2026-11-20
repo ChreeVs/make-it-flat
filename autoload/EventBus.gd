@@ -6,6 +6,7 @@ signal block_ricochet(block: Node3D, hit_position: Vector3, normal: Vector3, req
 signal block_destroyed(block: Node3D, by_gravity: bool)
 signal chain_collapse_triggered(blocks_count: int, total_mass_kg: float)
 signal explosion_triggered(world_pos: Vector3, radius: float)
+signal floor_cleared(floor_index: int, floor_name: String, bonus_money: float)
 
 # Eventi di economia e progressione
 signal currency_changed(new_amount: float, delta: float)
@@ -14,6 +15,7 @@ signal tool_unlocked(tool_id: StringName)
 signal tool_equipped(tool_data: Resource)
 signal tool_swung(tool_data: Resource)
 signal tier_unlocked(new_tier: int)
+signal difficulty_changed(difficulty_id: String)
 
 # Eventi di gioco e contratti
 signal contract_selected(contract_data: Resource)

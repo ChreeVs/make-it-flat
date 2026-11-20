@@ -1,6 +1,6 @@
 extends Node
 
-const PLAYER_SAFE_SPAWN := Vector3(0.0, 1.0, 12.0)
+const PLAYER_SAFE_SPAWN := Vector3(0.0, 1.0, 14.5)
 
 var current_contract: ContractData = null
 var current_structure: Node3D = null
@@ -31,11 +31,48 @@ func is_any_ui_open() -> bool:
 		or is_contract_menu_open
 	)
 
-func _unhandled_input(event: InputEvent) -> void:
-	if not event.is_action_pressed("ui_cancel"):
+# Usiamo _input invece di _unhandled_input per garantire che ESC / K / B funzionino
+# SEMPRE anche se un pulsante o uno slider ha il focus della GUI!
+func _input(event: InputEvent) -> void:
+	if not (event is InputEventKey):
+		return
+	var ke := event as InputEventKey
+	if not ke.pressed or ke.echo:
 		return
 
-	# Se siamo nel menu principale, ESC chiude solo eventuali sottoschermate (Impostazioni / Intro)
+	if event.is_action_pressed("ui_cancel"):
+		_handle_escape_key()
+		get_viewport().set_input_as_handled()
+		return
+
+	# Non aprire overlay di gioco se siamo nel Menu Principale, Pausa, Intro o Impostazioni
+	if is_main_menu_open or is_pause_menu_open or is_intro_open or is_settings_open:
+		return
+
+	if event.is_action_pressed("toggle_skills") or event.is_action_pressed("toggle_shop"):
+		_toggle_upgrade_hub()
+		get_viewport().set_input_as_handled()
+		return
+
+	if event.is_action_pressed("toggle_contracts"):
+		var cm := get_tree().get_root().find_child("ContractMenu", true, false)
+		if cm:
+			if cm.visible and cm.has_method("close_menu"):
+				cm.close_menu()
+			elif not cm.visible and cm.has_method("open_menu"):
+				cm.open_menu()
+			get_viewport().set_input_as_handled()
+
+func _toggle_upgrade_hub() -> void:
+	var st := get_tree().get_root().find_child("SkillTreeMenu", true, false)
+	if not st:
+		return
+	if st.visible and st.has_method("close_menu"):
+		st.close_menu()
+	elif st.has_method("open_menu"):
+		st.open_menu()
+
+func _handle_escape_key() -> void:
 	if is_main_menu_open:
 		if is_settings_open:
 			_close_node("SettingsMenu", "close_settings")
@@ -43,15 +80,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			_close_node("MainMenu", "close_intro")
 		return
 
-	# In gioco: chiudi il pannello aperto, altrimenti apri/chiudi Menu Pausa
 	if is_settings_open:
 		_close_node("SettingsMenu", "close_settings")
 		return
-	if is_shop_open:
-		_close_node("ShopMenu", "close_shop")
-		return
 	if is_skill_tree_open:
 		_close_node("SkillTreeMenu", "close_menu")
+		return
+	if is_shop_open:
+		_close_node("ShopMenu", "close_shop")
 		return
 	if is_contract_menu_open:
 		_close_node("ContractMenu", "close_menu")
@@ -89,6 +125,13 @@ func close_gameplay_overlays(except_name: String = "") -> void:
 func _on_contract_selected(contract: ContractData) -> void:
 	load_contract(contract)
 
+func load_skyscraper_for_difficulty() -> void:
+	var path := "res://data/contracts/tier5_skyscraper.tres"
+	if ResourceLoader.exists(path):
+		var c: ContractData = load(path)
+		if c:
+			await load_contract(c)
+
 func load_contract(contract: ContractData) -> void:
 	if not contract:
 		return
@@ -122,7 +165,11 @@ func load_contract(contract: ContractData) -> void:
 		current_structure = inst
 		_reposition_player_safely()
 		if not is_main_menu_open:
-			EventBus.show_notification.emit("Cantiere pronto: %s" % contract.title, Color(0.96, 0.78, 0.24))
+			var d_lbl: String = String(EconomyManager.get_difficulty_config().get("label", "FACILE"))
+			EventBus.show_notification.emit(
+				"Grattacielo pronto [%s — %d Piani Arredati]!" % [d_lbl, EconomyManager.get_target_skyscraper_floors()],
+				Color(0.96, 0.78, 0.24)
+			)
 
 func _reposition_player_safely() -> void:
 	var player := get_tree().get_first_node_in_group("player") as CharacterBody3D
@@ -158,16 +205,11 @@ func complete_current_contract() -> void:
 
 	if current_contract.tier >= EconomyManager.unlocked_tier and current_contract.tier < 5:
 		EconomyManager.unlock_tier(current_contract.tier + 1)
-		EventBus.show_notification.emit(
-			"CANTIERE COMPLETATO! +€%d  •  SBLOCCATO TIER %d!" % [int(bonus), EconomyManager.unlocked_tier],
-			Color(0.30, 0.95, 0.48)
-		)
-	else:
-		EventBus.show_notification.emit(
-			"CANTIERE COMPLETATO! Premio incassato: +€%d" % int(bonus),
-			Color(0.30, 0.95, 0.48)
-		)
 
+	EventBus.show_notification.emit(
+		"GRATTACIELO RASO AL SUOLO! Premio Finale: +€%d" % int(bonus),
+		Color(0.30, 0.95, 0.48)
+	)
 	SaveManager.save_game()
 	EventBus.contract_completed.emit(current_contract)
 

@@ -46,12 +46,10 @@ function loadCollection(relDir) {
 
 function parseSkillTree() {
   const ecoPath = path.join(ROOT, 'autoload', 'EconomyManager.gd');
-  if (!fs.existsSync(ecoPath)) return { c4Cost: 180, nodes: [] };
+  if (!fs.existsSync(ecoPath)) return { c4Cost: 90, nodes: [] };
   const raw = fs.readFileSync(ecoPath, 'utf8');
-  const c4Match = raw.match(/C4_BASE_UNIT_COST:\s*float\s*=\s*([0-9.]+)/);
-  const c4Cost = c4Match ? Number(c4Match[1]) : 180;
   const nodes = [];
-  const regRe = /_register_upgrade\(\s*&"([^"]+)",\s*"([^"]+)",\s*"([^"]+)",\s*"([^"]+)",\s*([0-9.]+),\s*([0-9.]+),\s*(\d+),\s*([0-9.]+),\s*&"([^"]*)",\s*(\d+)/g;
+  const regRe = /_register_upgrade\(\s*&"([^"]+)",\s*"([^"]+)",\s*"([^"]+)",\s*"([^"]+)",\s*([0-9.]+),\s*([0-9.]+),\s*(\d+),\s*([0-9.]+),\s*&"([^"]*)",\s*(\d+),\s*Vector2\([^)]*\)(?:,\s*"([^"]*)")?/g;
   for (const m of raw.matchAll(regRe)) {
     nodes.push({
       id: m[1],
@@ -64,9 +62,10 @@ function parseSkillTree() {
       effectPct: Math.round(Number(m[8]) * 100),
       parentId: m[9] || null,
       minParentLvl: Number(m[10]),
+      unlockBadge: m[11] || '',
     });
   }
-  return { c4Cost, nodes };
+  return { c4Cost: 90, nodes };
 }
 
 function loadTextures() {
@@ -82,8 +81,8 @@ function loadTextures() {
         ? 'Normal Map'
         : f.startsWith('tex_cracks_')
           ? 'Damage Overlay'
-          : f.startsWith('tex_mat_') || f.startsWith('tex_site_') || f.startsWith('tex_roof_') || f.startsWith('tex_asphalt') || f.startsWith('tex_container_')
-            ? 'Material / Env'
+          : f.startsWith('tex_mat_') || f.startsWith('tex_site_') || f.startsWith('tex_roof_') || f.startsWith('tex_asphalt') || f.startsWith('tex_container_') || f.startsWith('tex_city_') || f.startsWith('tex_sidewalk_')
+            ? 'Material / City'
             : 'Tool Texture',
     }));
 }
@@ -97,11 +96,10 @@ function esc(s) {
 }
 
 function renderHtml() {
-  const contracts = loadCollection('data/contracts').sort((a, b) => Number(a.tier || 0) - Number(b.tier || 0));
   const materials = loadCollection('data/materials').sort((a, b) => Number(a.hardness_tier || 0) - Number(b.hardness_tier || 0));
   const tools = loadCollection('data/tools').sort((a, b) => Number(a.unlock_cost || 0) - Number(b.unlock_cost || 0));
   const textures = loadTextures();
-  const { c4Cost, nodes: skillNodes } = parseSkillTree();
+  const { nodes: skillNodes } = parseSkillTree();
 
   const tierColors = {
     1: '#73d973',
@@ -116,17 +114,63 @@ function renderHtml() {
     POTENZA: '#f97316',
     ECONOMIA: '#4ade80',
     MOBILITA: '#38bdf8',
-    AUTOMAZIONE: '#38bdf8',
+    AUTOMAZIONE: '#c084fc',
   };
 
-  const stairsIds = new Set(['tier2_garage', 'tier3_palazzina', 'tier4_warehouse', 'tier5_skyscraper']);
+  const difficulties = [
+    {
+      name: 'FACILE',
+      color: '#4ade80',
+      floors: '4 Piani Arredati (1.093 blocchi)',
+      econ: 'Guadagni +85% • Costi -32% • HP -28% • C4 €90',
+      note: 'Garantito lo sblocco di tutti i 7 strumenti, Drone Laser e 100% dei potenziamenti in 1 sola partita!',
+      rooms: 'P1 Lobby & Caffetteria + Bagno • P2 Uffici Open-Space & Riunioni + 2 Bagni • P3 Appartamenti Residenziali (Letti, Cucine, Vasche) • P4 Ristorante Panoramico & Sky Bar + Tettopiano HVAC'
+    },
+    {
+      name: 'NORMALE',
+      color: '#f5b427',
+      floors: '6 Piani Arredati (1.542 blocchi)',
+      econ: 'Guadagni +20% • Costi Standard • HP 100% • C4 €160',
+      note: 'Sfida strutturale bilanciata con piani aggiuntivi e Suite VIP Direzionale.',
+      rooms: 'Include tutti i piani Facile + P5 Suite Direzionale & VIP Bar/Spa + P6 Sala Server IT & Laboratorio Tecnico'
+    },
+    {
+      name: 'HARDCORE',
+      color: '#f87171',
+      floors: '8 Piani Colossali (2.024 blocchi)',
+      econ: 'Guadagni -10% • Costi +25% • HP +45% • C4 €240',
+      note: 'Grattacielo estremo per demolitori esperti: richiede uso strategico dei pilastri portanti e C4.',
+      rooms: 'Torre completa 8 piani con doppi piani Uffici/Appartamenti, Ristorante, Suite CEO, Sala Server e Tettopiano Meccanico'
+    }
+  ];
+
+  const controls = [
+    ['WASD + SHIFT + SPAZIO', 'Movimento, corsa, salto (jump-buffer anti-drop) e salita fluida sulle scale interne'],
+    ['CTRL oppure [C]', 'Accovacciamento fluido con controllo collisione soffitto (passa sotto macerie e pilastri bassi)'],
+    ['CLICK SINISTRO (LMB)', 'Colpisci / Demolisci continuo / Piazza carica C4 / Innesca Detonatore (auto-recapture mouse)'],
+    ['CLICK DESTRO (RMB)', 'Colpo Pesante (1.65x danno + mini AoE) con strumenti melee • Detona subito i C4 armati'],
+    ['[1–7] / NUMPAD / ROTELLINA / [Q]', 'Selezione strumento diretta o scambio istantaneo [Q] con lo strumento precedente'],
+    ['[F]', 'Detonazione Rapida Universale di tutte le cariche C4 armate da qualsiasi strumento'],
+    ['[K] oppure [TAB]', 'Albero Potenziamenti & Sblocco Automatico Strumenti (gestito in _input: zero bug focus UI)'],
+    ['[B] / [E] / TIENI [R] 1.2s / [ESC]', 'Arsenale & Prestigio [B] • Incassa Premio Torre [E] • Ricostruisci (tieni R 1.2s) • Pausa [ESC]']
+  ];
+
+  const unlockHints = {
+    crowbar: 'Strumento Base (Incluso)',
+    hammer: 'Sblocco: Forza & Martello Lv.1 [K]',
+    sledgehammer_3kg: 'Sblocco: Ritmo & Mazze Lv.1 [K]',
+    sledgehammer_8kg: 'Sblocco: Ritmo & Mazze Lv.3 [K]',
+    electric_demolisher: 'Sblocco: Demolitore & Onda d\'Urto Lv.1 [K]',
+    c4_charge: 'Sblocco: Genio Esplosivista C4 Lv.1 [K]',
+    remote_detonator: 'Sblocco: Genio Esplosivista C4 Lv.1 [K]',
+  };
 
   return `<!DOCTYPE html>
 <html lang="it">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Make It Flat — Godot 4.7 Project Inspector</title>
+  <title>Make It Flat — Grattacielo Arredato (Godot 4.7)</title>
   <style>
     :root {
       --bg: #0b0e14;
@@ -198,7 +242,12 @@ function renderHtml() {
     }
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(275px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 14px;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
       gap: 14px;
     }
     .card {
@@ -216,23 +265,29 @@ function renderHtml() {
     .desc { font-size: 12px; color: var(--muted); }
     .meta { font-size: 12px; color: #cbd5e1; font-family: ui-monospace, monospace; }
     .money { color: var(--green); font-weight: 700; font-size: 13px; }
+    .badge { color: var(--amber); font-weight: 700; font-size: 11px; }
     .c4-note { color: var(--red); font-weight: 600; font-size: 12px; }
-    .stairs-tag { color: var(--cyan); font-size: 11px; font-weight: 700; letter-spacing: 0.04em; }
-    .highlights {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 12px;
-      margin-bottom: 28px;
-    }
-    .hl-card {
-      background: #101620;
+    .ctrl-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--panel);
       border: 1px solid var(--border);
-      border-top: 2px solid var(--cyan);
       border-radius: 8px;
-      padding: 13px 15px;
+      overflow: hidden;
     }
-    .hl-card strong { display: block; font-size: 13px; color: #fff; margin-bottom: 4px; }
-    .hl-card span { font-size: 12px; color: var(--muted); }
+    .ctrl-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .ctrl-table tr:last-child td { border-bottom: none; }
+    .ctrl-key {
+      font-family: ui-monospace, monospace;
+      color: var(--amber);
+      font-weight: 700;
+      width: 290px;
+      white-space: nowrap;
+    }
     .mat-preview { display: flex; gap: 8px; margin-bottom: 4px; }
     .mat-preview img {
       width: 64px;
@@ -271,8 +326,8 @@ function renderHtml() {
   <div class="wrap">
     <header>
       <div class="brand">
-        <h1>MAKE IT FLAT — GODOT 4.7</h1>
-        <p>Simulatore Incrementale di Demolizione 3D in Prima Persona • Ispettore Asset, Skill Tree &amp; Strutture</p>
+        <h1>MAKE IT FLAT — TORRE SKYLINE ARREDATA</h1>
+        <p>Simulatore Incrementale di Demolizione 3D in Prima Persona • Grattacielo Multipiano Arredato, Difficoltà &amp; Skill Tree</p>
       </div>
       <div class="run-box">
         <div>Progetto nativo <strong>Godot Engine 4.7 (Jolt Physics)</strong></div>
@@ -281,63 +336,40 @@ function renderHtml() {
     </header>
 
     <div class="stats">
-      <div class="stat"><div class="val">${contracts.length}</div><div class="lbl">Edifici Architettonici</div></div>
-      <div class="stat"><div class="val">${skillNodes.length}</div><div class="lbl">Nodi Skill Tree [K]</div></div>
-      <div class="stat"><div class="val">€${c4Cost}</div><div class="lbl">Costo Base per Carica C4</div></div>
-      <div class="stat"><div class="val">${tools.length}</div><div class="lbl">Strumenti 3D [1–7]</div></div>
-      <div class="stat"><div class="val">${textures.length}</div><div class="lbl">Texture PBR &amp; Env</div></div>
-    </div>
-
-    <div class="highlights">
-      <div class="hl-card">
-        <strong>Architettura Reale &amp; Scale Interne</strong>
-        <span>20 forme di blocco (pilastri, pareti sottili, vetrate, solette, tetti a falde e rampe scale percorribili con gradini scolpiti).</span>
-      </div>
-      <div class="hl-card">
-        <strong>Distretto Industriale 3D a 360°</strong>
-        <span>Strada asfaltata, gru a torre animata, container ufficio, torri faro, skyline urbano illuminato, colline e viale alberato.</span>
-      </div>
-      <div class="hl-card">
-        <strong>HUD Zero-Lag &amp; Menu Completi</strong>
-        <span>Rimossi i popup +€ 3D: contatore denaro animato con accumulatore singolo, Menu Principale orbitale, Intro a 3 step, Pausa e Impostazioni.</span>
-      </div>
-      <div class="hl-card">
-        <strong>Economia Bilanciata &amp; C4 a Pagamento</strong>
-        <span>Ogni carica C4 piazzata costa €${c4Cost} (scontabile fino al -50% via Skill Tree) per impedire spam gratuito e premiare la demolizione strategica.</span>
-      </div>
+      <div class="stat"><div class="val">4 / 6 / 8</div><div class="lbl">Piani Arredati (Facile→Hardcore)</div></div>
+      <div class="stat"><div class="val">17</div><div class="lbl">Modelli Arredi Distruttibili</div></div>
+      <div class="stat"><div class="val">${skillNodes.length}</div><div class="lbl">Potenziamenti (Sbloccano Strumenti)</div></div>
+      <div class="stat"><div class="val">${materials.length}</div><div class="lbl">Materiali PBR (Arredi &amp; Struttura)</div></div>
+      <div class="stat"><div class="val">${textures.length}</div><div class="lbl">Texture PBR, Città &amp; Strumenti</div></div>
     </div>
 
     <section>
-      <h2>Commesse &amp; Strutture Architettoniche (Tier 1–5)</h2>
-      <div class="grid">
-        ${contracts.map((c) => {
-          const tc = tierColors[Number(c.tier)] || '#fff';
-          const hasStairs = stairsIds.has(c.contract_id);
-          return `<div class="card">
-            <div class="row">
-              <span class="tier" style="color:${tc}">TIER ${esc(c.tier)}</span>
-              <span class="money">+€ ${Math.round(Number(c.completion_bonus || 0))}</span>
-            </div>
-            <div class="title">${esc(c.title)}</div>
-            ${hasStairs ? '<div class="stairs-tag">SCALE INTERNE PERCORRIBILI</div>' : ''}
-            <div class="desc">${esc(c.description)}</div>
-            <div class="meta">ID: ${esc(c.contract_id)} • Soglia: ${Math.round(Number(c.completion_threshold || 0.88) * 100)}%</div>
-          </div>`;
-        }).join('')}
+      <h2>Modalità di Difficoltà &amp; Grattacielo Arredato (Facile → Normale → Hardcore)</h2>
+      <div class="grid-3">
+        ${difficulties.map((d) => `<div class="card" style="border-top: 3px solid ${d.color}">
+          <div class="row">
+            <span class="title" style="color:${d.color}">${esc(d.name)}</span>
+            <span class="meta">${esc(d.floors)}</span>
+          </div>
+          <div class="money">${esc(d.econ)}</div>
+          <div class="desc">${esc(d.note)}</div>
+          <div class="desc" style="color:#cbd5e1; margin-top:4px">${esc(d.rooms)}</div>
+        </div>`).join('')}
       </div>
     </section>
 
     <section>
-      <h2>Albero delle Abilità — Skill Tree [K] (${skillNodes.length} Nodi)</h2>
+      <h2>Albero Potenziamenti &amp; Sblocco Automatico Strumenti [K / TAB]</h2>
       <div class="grid">
         ${skillNodes.map((n) => {
           const bc = branchColors[n.branch] || '#f5b427';
           return `<div class="card" style="border-left: 3px solid ${bc}">
             <div class="row">
               <span class="tier" style="color:${bc}">${esc(n.branch)}</span>
-              <span class="money">Base € ${Math.round(n.baseCost)}</span>
+              <span class="money">Base € ${Math.round(n.baseCost)} (Facile -32%)</span>
             </div>
             <div class="title">${esc(n.title)}</div>
+            ${n.unlockBadge ? `<div class="badge">★ ${esc(n.unlockBadge)}</div>` : ''}
             <div class="desc">${esc(n.description)}</div>
             <div class="meta">Max Lv.${n.maxLevel} • +${n.effectPct}%/lv • ${n.parentId ? `Richiede ${esc(n.parentId)} Lv.${n.minParentLvl}` : 'Nodo Radice'}</div>
           </div>`;
@@ -346,25 +378,32 @@ function renderHtml() {
     </section>
 
     <section>
-      <h2>Arsenale Demolizione (Hotbar 1–7)</h2>
+      <h2>Arsenale 3D Rimodellato (Sbloccato via Potenziamenti)</h2>
       <div class="grid">
         ${tools.map((t) => {
           const isC4 = t.tool_id === 'c4_charge';
           return `<div class="card">
             <div class="row">
               <span class="title">${esc(t.display_name)}</span>
-              <span class="money">${Number(t.unlock_cost || 0) === 0 ? 'BASE' : '€ ' + Math.round(Number(t.unlock_cost))}</span>
+              <span class="tier" style="color:${tierColors[Number(t.hardness_penetration)] || '#fff'}">PENETRAZIONE T${esc(t.hardness_penetration)}</span>
             </div>
-            ${isC4 ? `<div class="c4-note">Costo operativo: € ${c4Cost} per ogni carica piazzata</div>` : ''}
-            <div class="meta">DMG: ${esc(t.base_damage)} • Penetrazione: T${esc(t.hardness_penetration)}</div>
-            <div class="meta">Cooldown: ${esc(t.attack_cooldown)}s • Portata: ${esc(t.reach_distance)}m • AoE: ${esc(t.aoe_radius || 0)}m</div>
+            <div class="badge">${esc(unlockHints[t.tool_id] || 'Sbloccabile in [K]')}</div>
+            ${isC4 ? '<div class="c4-note">Costo per carica: €90 (Facile) / €160 (Normale) / €240 (Hardcore)</div>' : ''}
+            <div class="meta">DMG: ${esc(t.base_damage)} • Cooldown: ${esc(t.attack_cooldown)}s • Portata: ${esc(t.reach_distance)}m • AoE: ${esc(t.aoe_radius || 0)}m</div>
           </div>`;
         }).join('')}
       </div>
     </section>
 
     <section>
-      <h2>Materiali Distruttibili PBR</h2>
+      <h2>Gestione Comandi Verificata &amp; Bug Risolti</h2>
+      <table class="ctrl-table">
+        ${controls.map(([k, d]) => `<tr><td class="ctrl-key">${esc(k)}</td><td>${esc(d)}</td></tr>`).join('')}
+      </table>
+    </section>
+
+    <section>
+      <h2>Materiali Distruttibili PBR (${materials.length})</h2>
       <div class="grid">
         ${materials.map((m) => {
           const tc = tierColors[Number(m.hardness_tier)] || '#fff';
@@ -377,7 +416,7 @@ function renderHtml() {
               <span class="title">${esc(m.display_name)}</span>
               <span class="tier" style="color:${tc}">DUREZZA T${esc(m.hardness_tier)}</span>
             </div>
-            <div class="meta">HP: ${esc(m.max_hp)} • Massa: ${esc(m.mass_kg)}kg • Valore: €${esc(m.base_money_value)}</div>
+            <div class="meta">HP: ${esc(m.max_hp)} • Massa: ${esc(m.mass_kg)}kg • Valore Base: €${esc(m.base_money_value)}</div>
             <div class="meta">Roughness: ${esc(m.roughness)} • Metallic: ${esc(m.metallic)}</div>
           </div>`;
         }).join('')}
@@ -385,7 +424,7 @@ function renderHtml() {
     </section>
 
     <section>
-      <h2>Galleria Texture PBR, Architettura &amp; Crepe (${textures.length} PNG)</h2>
+      <h2>Galleria Texture PBR, Arredi, Skyline &amp; Strumenti (${textures.length} PNG)</h2>
       <div class="tex-grid">
         ${textures.map((tx) => `<div class="tex-card">
           <img src="${tx.url}" alt="${esc(tx.name)}" loading="lazy" />

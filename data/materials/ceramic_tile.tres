@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="MaterialData" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/MaterialData.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/textures/tex_mat_ceramic.png" id="2_albedo"]
+[ext_resource type="Texture2D" path="res://assets/textures/tex_mat_ceramic_n.png" id="3_normal"]
+
+[resource]
+script = ExtResource("1_script")
+material_id = &"ceramic_tile"
+display_name = "Ceramica & Sanitari"
+hardness_tier = 1
+max_hp = 60.0
+mass_kg = 28.0
+base_money_value = 42.0
+is_composite = false
+color = Color(0.96, 0.98, 1.0, 1.0)
+dust_color = Color(0.86, 0.92, 0.96, 1.0)
+albedo_texture = ExtResource("2_albedo")
+normal_texture = ExtResource("3_normal")
+roughness = 0.22
+metallic = 0.05
+uv_scale = Vector3(1.0, 1.0, 1.0)

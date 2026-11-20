@@ -98,23 +98,25 @@ theme_override_constants/separation = 12
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.98, 0.76, 0.22, 1)
-theme_override_font_sizes/font_size = 21
-text = "ALBERO DELLE ABILITÀ  [K]"
+theme_override_font_sizes/font_size = 20
+text = "POTENZIAMENTI & SBLOCCO STRUMENTI  [K / TAB]"
 
 [node name="MoneyLabel" type="Label" parent="Panel/Margin/VBox/Header"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.34, 0.96, 0.52, 1)
-theme_override_font_sizes/font_size = 18
+theme_override_font_sizes/font_size = 17
 text = "Capitale: € 0"
 
 [node name="ShopSwitchButton" type="Button" parent="Panel/Margin/VBox/Header"]
 custom_minimum_size = Vector2(145, 34)
 layout_mode = 2
-text = "Officina [B]"
+focus_mode = 0
+text = "Arsenale [B]"
 
 [node name="CloseButton" type="Button" parent="Panel/Margin/VBox/Header"]
 custom_minimum_size = Vector2(96, 34)
 layout_mode = 2
+focus_mode = 0
 text = "Chiudi"
 
 [node name="Sep" type="Panel" parent="Panel/Margin/VBox"]

@@ -11,13 +11,13 @@ extends Control
 @onready var prestige_button: Button = $Panel/Margin/VBox/Scroll/ContentVBox/PrestigePanel/PrestigeSection/PrestigeButton
 
 var tool_definitions: Array[Dictionary] = [
-	{"id": &"crowbar", "slot": 1, "name": "Piede di Porco", "cost": 0.0, "tier": 1, "desc": "35 DMG • T1 • Base"},
-	{"id": &"hammer", "slot": 2, "name": "Martello Carpentiere", "cost": 150.0, "tier": 1, "desc": "65 DMG • T1 • Rapido"},
-	{"id": &"sledgehammer_3kg", "slot": 3, "name": "Mazza Cantiere 3kg", "cost": 500.0, "tier": 1, "desc": "120 DMG • T1 • AoE 0.8m"},
-	{"id": &"sledgehammer_8kg", "slot": 4, "name": "Mazza Pesante 8kg", "cost": 1800.0, "tier": 2, "desc": "260 DMG • T2 • AoE 1.3m"},
-	{"id": &"electric_demolisher", "slot": 5, "name": "Demolitore Elettrico", "cost": 3800.0, "tier": 2, "desc": "45/tick • T2 • Continuo"},
-	{"id": &"c4_charge", "slot": 6, "name": "Carica Esplosiva C4", "cost": 7500.0, "tier": 3, "desc": "950 DMG • T4 • A pagamento/carica"},
-	{"id": &"remote_detonator", "slot": 7, "name": "Detonatore Remoto", "cost": 2500.0, "tier": 3, "desc": "Innesco a Catena C4"}
+	{"id": &"crowbar", "slot": 1, "name": "Piede di Porco", "tier": 1, "desc": "35 DMG • T1 • Base"},
+	{"id": &"hammer", "slot": 2, "name": "Martello Carpentiere", "tier": 1, "desc": "65 DMG • T1 • Rapido"},
+	{"id": &"sledgehammer_3kg", "slot": 3, "name": "Mazza Cantiere 3kg", "tier": 1, "desc": "120 DMG • T1 • AoE 0.8m"},
+	{"id": &"sledgehammer_8kg", "slot": 4, "name": "Mazza Pesante 8kg", "tier": 2, "desc": "260 DMG • T2 • AoE 1.3m"},
+	{"id": &"electric_demolisher", "slot": 5, "name": "Demolitore Elettrico", "tier": 3, "desc": "58/tick • T3 • Continuo"},
+	{"id": &"c4_charge", "slot": 6, "name": "Carica Esplosiva C4", "tier": 4, "desc": "950 DMG • T4 • A carica"},
+	{"id": &"remote_detonator", "slot": 7, "name": "Detonatore Remoto", "tier": 4, "desc": "Innesco a Catena [F / LMB]"}
 ]
 
 var _card_style: StyleBoxFlat
@@ -26,16 +26,21 @@ var _card_equipped_style: StyleBoxFlat
 func _ready() -> void:
 	visible = false
 	_init_styles()
+	close_button.focus_mode = Control.FOCUS_NONE
+	skills_switch_btn.focus_mode = Control.FOCUS_NONE
 	close_button.pressed.connect(close_shop)
 	skills_switch_btn.pressed.connect(_on_switch_to_skills)
 	if prestige_button:
+		prestige_button.focus_mode = Control.FOCUS_NONE
 		prestige_button.pressed.connect(_on_prestige_pressed)
 	if license_button:
+		license_button.focus_mode = Control.FOCUS_NONE
 		license_button.pressed.connect(_on_license_pressed)
 
 	EventBus.currency_changed.connect(func(_new_amt, _delta): if visible: refresh_shop())
 	EventBus.upgrade_purchased.connect(func(_id, _lvl, _cost): if visible: refresh_shop())
-	EventBus.tier_unlocked.connect(func(_tier): if visible: refresh_shop())
+	EventBus.tool_unlocked.connect(func(_tid): if visible: refresh_shop())
+	EventBus.difficulty_changed.connect(func(_d): if visible: refresh_shop())
 
 func _init_styles() -> void:
 	_card_style = StyleBoxFlat.new()
@@ -64,15 +69,6 @@ func _init_styles() -> void:
 	_card_equipped_style.content_margin_top = 10
 	_card_equipped_style.content_margin_bottom = 10
 
-func _unhandled_input(event: InputEvent) -> void:
-	if GameManager.is_main_menu_open or GameManager.is_pause_menu_open:
-		return
-	if event.is_action_pressed("toggle_shop"):
-		if visible:
-			close_shop()
-		else:
-			open_shop()
-
 func open_shop() -> void:
 	GameManager.close_gameplay_overlays("ShopMenu")
 	visible = true
@@ -99,27 +95,24 @@ func refresh_shop() -> void:
 	_update_prestige_section()
 
 func _update_license_section() -> void:
-	var curr_tier: int = EconomyManager.unlocked_tier
-	if curr_tier >= 5:
-		license_info.text = "Licenza Demolizioni: TIER 5 MASSIMO (Tutte le strutture sbloccate!)"
-		license_button.text = "LICENZA MASSIMA"
-		license_button.disabled = true
-	else:
-		var next_tier: int = curr_tier + 1
-		var cost: float = EconomyManager.get_tier_license_cost(next_tier)
-		license_info.text = "Licenza Attiva: TIER %d  •  Sblocca Tier %d completando un cantiere attuale o acquistando subito la licenza" % [curr_tier, next_tier]
-		license_button.text = "Licenza Tier %d (€ %d)" % [next_tier, int(cost)]
-		license_button.disabled = EconomyManager.current_money < cost
+	var cfg: Dictionary = EconomyManager.get_difficulty_config()
+	var unlocked_cnt: int = EconomyManager.unlocked_tools.size()
+	license_info.text = "Modalità %s (%d Piani Arredati)  •  Strumenti sbloccati: %d/%d  —  Tutti gli strumenti si sbloccano potenziando l'Albero Abilità [K]" % [
+		String(cfg.get("label", "FACILE")),
+		int(cfg.get("floors", 4)),
+		unlocked_cnt,
+		EconomyManager.TOOL_ORDER.size()
+	]
+	license_button.text = "Apri Albero Abilità [K]"
+	license_button.disabled = false
 
 func _on_license_pressed() -> void:
-	var next_tier: int = EconomyManager.unlocked_tier + 1
-	if EconomyManager.purchase_tier_license(next_tier):
-		refresh_shop()
+	_on_switch_to_skills()
 
 func _update_prestige_section() -> void:
 	var has_tower: bool = SaveManager.save_data.get("completed_contracts", []).has("tier5_skyscraper")
 	var can_prestige: bool = EconomyManager.current_money >= 25000.0 or has_tower
-	prestige_label.text = "Cicli Prestigio: %d  |  Moltiplicatore Permanente: %.1fx  •  Requisito: €25.000 o completa il Grattacielo Skyline" % [
+	prestige_label.text = "Cicli Prestigio: %d  |  Moltiplicatore Permanente: %.1fx  •  Requisito: €25.000 o completa il Grattacielo Arredato" % [
 		EconomyManager.prestige_count,
 		EconomyManager.permanent_multiplier
 	]
@@ -127,9 +120,7 @@ func _update_prestige_section() -> void:
 
 func _on_prestige_pressed() -> void:
 	EconomyManager.perform_prestige()
-	var t1: ContractData = load("res://data/contracts/tier1_fence.tres")
-	if t1:
-		GameManager.load_contract(t1)
+	GameManager.load_skyscraper_for_difficulty()
 	close_shop()
 	EventBus.show_notification.emit(
 		"PRESTIGIO ESEGUITO! Nuovo Moltiplicatore Permanente: %.1fx" % EconomyManager.permanent_multiplier,
@@ -145,21 +136,20 @@ func _build_tools_list() -> void:
 		var t_id: StringName = t_def["id"]
 		var is_unlocked: bool = EconomyManager.unlocked_tools.has(String(t_id))
 		var is_equipped: bool = (EconomyManager.equipped_tool_id == t_id)
-		var cost: float = t_def["cost"]
 
 		var card := PanelContainer.new()
 		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		card.custom_minimum_size = Vector2(205, 134)
+		card.custom_minimum_size = Vector2(205, 140)
 		card.add_theme_stylebox_override("panel", _card_equipped_style if is_equipped else _card_style)
 
 		var vbox := VBoxContainer.new()
 		vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-		vbox.add_theme_constant_override("separation", 6)
+		vbox.add_theme_constant_override("separation", 5)
 
 		var badge_lbl := Label.new()
-		badge_lbl.text = "TASTO [%d] • TIER %d" % [t_def["slot"], t_def["tier"]]
+		badge_lbl.text = "TASTO [%d] • PENETRAZIONE T%d" % [t_def["slot"], t_def["tier"]]
 		badge_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		badge_lbl.add_theme_font_size_override("font_size", 11)
+		badge_lbl.add_theme_font_size_override("font_size", 10)
 		badge_lbl.add_theme_color_override("font_color", Color(0.95, 0.72, 0.22) if is_equipped else Color(0.55, 0.65, 0.78))
 		vbox.add_child(badge_lbl)
 
@@ -179,6 +169,7 @@ func _build_tools_list() -> void:
 
 		var action_btn := Button.new()
 		action_btn.custom_minimum_size = Vector2(0, 34)
+		action_btn.focus_mode = Control.FOCUS_NONE
 
 		if is_equipped:
 			action_btn.text = "✓ Equipaggiato"
@@ -189,13 +180,9 @@ func _build_tools_list() -> void:
 				_equip_tool(t_id)
 			)
 		else:
-			action_btn.text = "Sblocca € %d" % int(cost)
-			action_btn.disabled = (EconomyManager.current_money < cost)
-			action_btn.pressed.connect(func():
-				if EconomyManager.spend_money(cost):
-					EconomyManager.unlock_tool(t_id)
-					_equip_tool(t_id)
-			)
+			action_btn.text = EconomyManager.get_tool_unlock_hint(t_id)
+			action_btn.add_theme_font_size_override("font_size", 10)
+			action_btn.pressed.connect(_on_switch_to_skills)
 
 		vbox.add_child(action_btn)
 		card.add_child(vbox)

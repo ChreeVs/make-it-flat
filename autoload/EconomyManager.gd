@@ -10,7 +10,6 @@ const TOOL_ORDER: Array[StringName] = [
 	&"remote_detonator"
 ]
 
-# Nuova curva economica bilanciata per Tier 1 -> 5
 const TIER_LICENSE_COSTS: Dictionary = {
 	2: 900.0,
 	3: 4500.0,
@@ -18,11 +17,61 @@ const TIER_LICENSE_COSTS: Dictionary = {
 	5: 45000.0
 }
 
-# Costo unitario di ogni carica C4 piazzata (impedisce lo spam gratuito)
-const C4_BASE_UNIT_COST: float = 180.0
+const C4_BASE_UNIT_COST: float = 160.0
 
+# Profili di difficoltà regolabili (Facile -> Normale -> Hardcore)
+const DIFFICULTIES: Dictionary = {
+	"easy": {
+		"id": "easy",
+		"label": "FACILE",
+		"subtitle": "Torre 4 Piani Arredati  •  Guadagni +85%  •  Costi -32%  •  Sblocca tutto in 1 partita",
+		"floors": 4,
+		"payout_mult": 1.85,
+		"hp_mult": 0.72,
+		"cost_mult": 0.68,
+		"c4_cost": 90.0,
+		"floor_bonus_base": 1100.0,
+		"tower_bonus": 16000.0
+	},
+	"normal": {
+		"id": "normal",
+		"label": "NORMALE",
+		"subtitle": "Torre 6 Piani Arredati  •  Economia Bilanciata  •  Sfida Strutturale Completa",
+		"floors": 6,
+		"payout_mult": 1.20,
+		"hp_mult": 1.00,
+		"cost_mult": 1.00,
+		"c4_cost": 160.0,
+		"floor_bonus_base": 1400.0,
+		"tower_bonus": 28000.0
+	},
+	"hardcore": {
+		"id": "hardcore",
+		"label": "HARDCORE",
+		"subtitle": "Torre 8 Piani Colossale  •  Strutture +45% HP  •  C4 €240  •  Per Demolitori Esperti",
+		"floors": 8,
+		"payout_mult": 0.90,
+		"hp_mult": 1.45,
+		"cost_mult": 1.25,
+		"c4_cost": 240.0,
+		"floor_bonus_base": 1800.0,
+		"tower_bonus": 55000.0
+	}
+}
+
+# Mappa Sblocco Automatico Strumenti tramite Potenziamenti dell'Albero Abilità!
+const UPGRADE_TOOL_UNLOCKS: Array[Dictionary] = [
+	{"upgrade": &"tool_damage", "level": 1, "tool": &"hammer", "name": "Martello Carpentiere [2]"},
+	{"upgrade": &"attack_speed", "level": 1, "tool": &"sledgehammer_3kg", "name": "Mazza 3kg [3]"},
+	{"upgrade": &"attack_speed", "level": 3, "tool": &"sledgehammer_8kg", "name": "Mazza Pesante 8kg [4]"},
+	{"upgrade": &"aoe_boost", "level": 1, "tool": &"electric_demolisher", "name": "Demolitore Elettrico [5]"},
+	{"upgrade": &"c4_discount", "level": 1, "tool": &"c4_charge", "name": "Carica C4 [6]"},
+	{"upgrade": &"c4_discount", "level": 1, "tool": &"remote_detonator", "name": "Detonatore Remoto [7]"}
+]
+
+var current_difficulty: String = "easy"
 var current_money: float = 0.0
-var unlocked_tier: int = 1
+var unlocked_tier: int = 5
 var equipped_tool_id: StringName = &"crowbar"
 var unlocked_tools: Array = ["crowbar"]
 var prestige_count: int = 0
@@ -37,142 +86,152 @@ func _ready() -> void:
 	_sync_from_save()
 
 func _init_skill_tree() -> void:
-	# NODO RADICE
+	# NODO RADICE -> Lv.1 sblocca Martello [2]
 	_register_upgrade(
 		&"tool_damage",
-		"Forza Strutturale",
-		"Potenzia il danno base di tutti gli strumenti e delle esplosioni del +25% per livello.",
+		"Forza & Martello",
+		"Potenzia il danno base di tutti gli strumenti del +25%/lv.  ★ Lv.1 SBLOCCA: Martello Carpentiere [2]!",
 		"RADICE",
-		45.0,
-		1.62,
-		20,
+		120.0,
+		1.52,
+		10,
 		0.25,
 		&"",
 		0,
-		Vector2(0.50, 0.13)
+		Vector2(0.50, 0.13),
+		"Lv.1 → Martello [2]"
 	)
 
-	# RAMO 1: POTENZA & ESPLOSIVI (Sinistra)
+	# RAMO 1: POTENZA & ARSENALE (Sinistra)
 	_register_upgrade(
 		&"attack_speed",
-		"Ritmo di Demolizione",
-		"Riduce il tempo tra un colpo e il successivo del +15% per livello.",
+		"Ritmo & Mazze",
+		"Velocità d'attacco +15%/lv.  ★ Lv.1 SBLOCCA: Mazza 3kg [3]  •  ★ Lv.3 SBLOCCA: Mazza Pesante 8kg [4] (T2)!",
 		"POTENZA",
-		75.0,
-		1.65,
-		12,
+		320.0,
+		1.55,
+		8,
 		0.15,
 		&"tool_damage",
 		1,
-		Vector2(0.18, 0.39)
+		Vector2(0.18, 0.39),
+		"Lv.1 Mazza 3k • Lv.3 Mazza 8k"
 	)
 	_register_upgrade(
 		&"aoe_boost",
-		"Onda Sismica",
-		"Espande il raggio d'urto delle mazze pesanti e delle cariche C4 del +18% per livello.",
+		"Demolitore & Onda d'Urto",
+		"Espande raggio AoE di mazze ed esplosivi del +20%/lv.  ★ Lv.1 SBLOCCA: Demolitore Elettrico [5] (T3)!",
 		"POTENZA",
-		280.0,
-		1.78,
-		8,
-		0.18,
+		1600.0,
+		1.58,
+		6,
+		0.20,
 		&"attack_speed",
 		2,
-		Vector2(0.18, 0.65)
+		Vector2(0.18, 0.65),
+		"Lv.1 → Demolitore [5]"
 	)
 	_register_upgrade(
 		&"c4_discount",
-		"Esplosivista Esperto",
-		"Riduce il costo di ogni carica C4 del -10% (fino a -50%) e +20% danno esplosivo.",
+		"Genio Esplosivista C4",
+		"★ Lv.1 SBLOCCA: C4 [6] + Detonatore [7] (T4)! Ogni livello sconta il costo C4 del -10% e aumenta il danno esplosivo del +25%.",
 		"POTENZA",
-		950.0,
-		1.95,
+		4800.0,
+		1.62,
 		5,
 		0.10,
 		&"aoe_boost",
 		1,
-		Vector2(0.18, 0.89)
+		Vector2(0.18, 0.89),
+		"Lv.1 → C4 [6] + Deton. [7]"
 	)
 
-	# RAMO 2: ECONOMIA & FISICA (Centro)
+	# RAMO 2: ECONOMIA & RECUPERO (Centro)
 	_register_upgrade(
 		&"debris_value",
-		"Riciclo Macerie",
-		"Aumenta il valore commerciale di ogni blocco demolito del +20% per livello.",
+		"Riciclo Arredi & Macerie",
+		"Aumenta il valore commerciale di ogni mobile, parete e pilastro demolito del +25% per livello.",
 		"ECONOMIA",
-		85.0,
-		1.68,
-		18,
-		0.20,
+		240.0,
+		1.54,
+		10,
+		0.25,
 		&"tool_damage",
 		1,
-		Vector2(0.50, 0.39)
+		Vector2(0.50, 0.39),
+		"+25% Valore Arredi"
 	)
 	_register_upgrade(
 		&"chain_bonus",
 		"Effetto Domino",
-		"Bonus extra del +30% sui blocchi abbattuti per crollo gravitazionale a catena.",
+		"Bonus extra del +35% sui blocchi e piani abbattuti per crollo gravitazionale a catena.",
 		"ECONOMIA",
-		220.0,
-		1.75,
-		12,
-		0.30,
+		720.0,
+		1.58,
+		8,
+		0.35,
 		&"debris_value",
-		2,
-		Vector2(0.50, 0.65)
+		1,
+		Vector2(0.50, 0.65),
+		"+35% Bonus Crolli"
 	)
 	_register_upgrade(
 		&"contract_bonus_mult",
-		"Appalti d'Oro",
-		"Incrementa il premio finale di completamento commessa del +18% per livello.",
+		"Premi di Piano & Appalto",
+		"Incrementa i premi monetari al completamento di ogni piano e dell'intera torre del +25% per livello.",
 		"ECONOMIA",
-		650.0,
-		1.88,
-		10,
-		0.18,
+		1500.0,
+		1.60,
+		6,
+		0.25,
 		&"chain_bonus",
 		1,
-		Vector2(0.50, 0.89)
+		Vector2(0.50, 0.89),
+		"+25% Premi Piano/Torre"
 	)
 
 	# RAMO 3: MOBILITÀ & AUTOMAZIONE (Destra)
 	_register_upgrade(
 		&"reach_distance",
 		"Braccio Esteso",
-		"Aumenta la portata di colpimento e piazzamento C4 del +12% per livello.",
+		"Aumenta la portata di demolizione e piazzamento C4 del +14% per livello.",
 		"MOBILITA",
-		90.0,
-		1.65,
-		8,
-		0.12,
+		260.0,
+		1.55,
+		6,
+		0.14,
 		&"tool_damage",
 		1,
-		Vector2(0.82, 0.39)
+		Vector2(0.82, 0.39),
+		"+14% Portata"
 	)
 	_register_upgrade(
 		&"player_speed",
-		"Stivali Antinfortunistici",
-		"Velocita di corsa, salita scale e spinta di salto aumentate del +10% per livello.",
+		"Stivali & Agilità",
+		"Velocità di corsa, accovacciata, salto e salita scale aumentata del +12% per livello.",
 		"MOBILITA",
-		110.0,
-		1.62,
-		10,
-		0.10,
+		380.0,
+		1.55,
+		6,
+		0.12,
 		&"reach_distance",
 		1,
-		Vector2(0.82, 0.65)
+		Vector2(0.82, 0.65),
+		"+12% Corsa & Scale"
 	)
 	_register_upgrade(
 		&"automation_drone",
-		"Drone Demolitore",
-		"Dispiega e potenzia un drone laser autonomo che demolisce le strutture dall'alto.",
+		"Drone Laser Autonomo",
+		"★ Lv.1 DISPIEGA il Drone Laser Autonomo che demolisce il grattacielo dall'alto! Livelli extra potenziano il laser.",
 		"AUTOMAZIONE",
-		550.0,
-		2.10,
-		8,
+		2200.0,
+		1.65,
+		5,
 		0.50,
 		&"player_speed",
-		2,
-		Vector2(0.82, 0.89)
+		1,
+		Vector2(0.82, 0.89),
+		"Lv.1 → Drone Laser"
 	)
 
 func _register_upgrade(
@@ -186,7 +245,8 @@ func _register_upgrade(
 	effect: float,
 	parent_id: StringName,
 	min_parent_lvl: int,
-	tree_pos: Vector2
+	tree_pos: Vector2,
+	unlock_badge: String = ""
 ) -> void:
 	upgrade_registry[id] = {
 		"id": id,
@@ -199,7 +259,8 @@ func _register_upgrade(
 		"effect": effect,
 		"parent_id": parent_id,
 		"min_parent_lvl": min_parent_lvl,
-		"tree_pos": tree_pos
+		"tree_pos": tree_pos,
+		"unlock_badge": unlock_badge
 	}
 
 func _preload_tools() -> void:
@@ -219,8 +280,49 @@ func get_tool_data(tool_id: StringName) -> ToolData:
 		return td
 	return null
 
+func get_difficulty_config() -> Dictionary:
+	return DIFFICULTIES.get(current_difficulty, DIFFICULTIES["easy"])
+
+func set_difficulty(diff_id: String) -> void:
+	if not DIFFICULTIES.has(diff_id):
+		diff_id = "easy"
+	current_difficulty = diff_id
+	SaveManager.save_data["difficulty"] = diff_id
+	SaveManager.save_game()
+	EventBus.difficulty_changed.emit(diff_id)
+
+func get_difficulty_hp_multiplier() -> float:
+	return float(get_difficulty_config().get("hp_mult", 1.0))
+
+func get_difficulty_payout_multiplier() -> float:
+	return float(get_difficulty_config().get("payout_mult", 1.0))
+
+func get_difficulty_cost_multiplier() -> float:
+	return float(get_difficulty_config().get("cost_mult", 1.0))
+
+func get_target_skyscraper_floors() -> int:
+	return int(get_difficulty_config().get("floors", 4))
+
+func get_floor_clear_bonus(floor_index: int) -> float:
+	var base: float = float(get_difficulty_config().get("floor_bonus_base", 1100.0))
+	var mult: float = get_upgrade_total_multiplier(&"contract_bonus_mult")
+	return round(base * (1.0 + float(floor_index) * 0.22) * mult * permanent_multiplier)
+
+func get_tool_unlock_hint(tool_id: StringName) -> String:
+	if tool_id == &"crowbar":
+		return "Strumento Base"
+	for entry in UPGRADE_TOOL_UNLOCKS:
+		if entry["tool"] == tool_id:
+			var uid: StringName = entry["upgrade"]
+			var title: String = String(upgrade_registry.get(uid, {}).get("title", String(uid)))
+			return "Potenzia '%s' a Lv.%d [K]" % [title, int(entry["level"])]
+	return "Sbloccabile nell'Albero Abilità [K]"
+
 func _sync_from_save() -> void:
 	var data := SaveManager.save_data
+	current_difficulty = String(data.get("difficulty", "easy"))
+	if not DIFFICULTIES.has(current_difficulty):
+		current_difficulty = "easy"
 	current_money = float(data.get("money", 0.0))
 	unlocked_tier = int(data.get("unlocked_tier", 1))
 	equipped_tool_id = StringName(String(data.get("equipped_tool", "crowbar")))
@@ -234,6 +336,22 @@ func _sync_from_save() -> void:
 		if not upgrades.has(key_str):
 			upgrades[key_str] = 0
 	data["upgrades"] = upgrades
+	_sync_tools_from_upgrades(false)
+
+func _sync_tools_from_upgrades(notify: bool = true) -> void:
+	for entry in UPGRADE_TOOL_UNLOCKS:
+		var uid: StringName = entry["upgrade"]
+		var req_lvl: int = int(entry["level"])
+		var tid: StringName = entry["tool"]
+		if get_upgrade_level(uid) >= req_lvl and not unlocked_tools.has(String(tid)):
+			unlock_tool(tid)
+			if notify:
+				EventBus.show_notification.emit(
+					"NUOVO STRUMENTO SBLOCCATO: %s!" % String(entry["name"]),
+					Color(0.98, 0.78, 0.22)
+				)
+				if tid != &"remote_detonator":
+					equip_tool(tid)
 
 func add_money(amount: float) -> void:
 	if amount <= 0.0:
@@ -254,9 +372,10 @@ func spend_money(amount: float) -> bool:
 	return true
 
 func get_c4_unit_cost() -> float:
-	var disc_lvl: int = get_upgrade_level(&"c4_discount")
-	var discount: float = clampf(float(disc_lvl) * 0.10, 0.0, 0.50)
-	return round(C4_BASE_UNIT_COST * (1.0 - discount))
+	var base_c4: float = float(get_difficulty_config().get("c4_cost", C4_BASE_UNIT_COST))
+	var disc_lvl: int = maxi(get_upgrade_level(&"c4_discount") - 1, 0)
+	var discount: float = clampf(float(disc_lvl) * 0.125, 0.0, 0.50)
+	return round(base_c4 * (1.0 - discount))
 
 func try_pay_c4_charge() -> bool:
 	var cost: float = get_c4_unit_cost()
@@ -271,17 +390,18 @@ func try_pay_c4_charge() -> bool:
 
 func get_c4_damage_multiplier() -> float:
 	var base_mult: float = get_upgrade_total_multiplier(&"tool_damage")
-	var exp_bonus: float = 1.0 + float(get_upgrade_level(&"c4_discount")) * 0.20
+	var exp_bonus: float = 1.0 + float(get_upgrade_level(&"c4_discount")) * 0.25
 	return base_mult * exp_bonus
 
 func get_aoe_radius_multiplier() -> float:
 	return get_upgrade_total_multiplier(&"aoe_boost")
 
 func get_contract_bonus(contract: ContractData) -> float:
-	if not contract:
-		return 0.0
+	var base_bonus: float = float(get_difficulty_config().get("tower_bonus", 16000.0))
+	if contract and contract.contract_id != &"tier5_skyscraper":
+		base_bonus = contract.completion_bonus
 	var bonus_mult: float = get_upgrade_total_multiplier(&"contract_bonus_mult")
-	return round(contract.completion_bonus * bonus_mult * permanent_multiplier)
+	return round(base_bonus * bonus_mult * permanent_multiplier)
 
 func get_upgrade_level(upgrade_id: StringName) -> int:
 	var upgrades: Dictionary = SaveManager.save_data.get("upgrades", {})
@@ -302,7 +422,8 @@ func get_upgrade_cost(upgrade_id: StringName) -> float:
 		return INF
 	var def: Dictionary = upgrade_registry[upgrade_id]
 	var lvl: int = get_upgrade_level(upgrade_id)
-	return floor(float(def["base_cost"]) * pow(float(def["multiplier"]), float(lvl)))
+	var raw_cost: float = float(def["base_cost"]) * pow(float(def["multiplier"]), float(lvl))
+	return floor(raw_cost * get_difficulty_cost_multiplier())
 
 func get_upgrade_total_multiplier(upgrade_id: StringName) -> float:
 	if not upgrade_registry.has(upgrade_id):
@@ -331,6 +452,7 @@ func purchase_upgrade(upgrade_id: StringName, enforce_prereq: bool = false) -> b
 	SaveManager.save_game()
 	EventBus.ui_click.emit()
 	EventBus.upgrade_purchased.emit(upgrade_id, new_lvl, cost)
+	_sync_tools_from_upgrades(true)
 	return true
 
 func unlock_tool(tool_id: StringName) -> void:
@@ -364,7 +486,6 @@ func purchase_tier_license(tier: int) -> bool:
 		return false
 	unlock_tier(tier)
 	EventBus.ui_click.emit()
-	EventBus.show_notification.emit("LICENZA TIER %d ACQUISTATA! Nuovi cantieri disponibili." % tier, Color(0.35, 0.92, 0.45))
 	return true
 
 func unlock_tier(new_tier: int) -> void:
@@ -377,15 +498,17 @@ func unlock_tier(new_tier: int) -> void:
 
 func calculate_block_payout(mat_data: MaterialData, by_gravity: bool = false) -> float:
 	if not mat_data:
-		return 5.0
+		return 8.0 * get_difficulty_payout_multiplier()
 	var base_val: float = mat_data.base_money_value
 	var debris_mult: float = get_upgrade_total_multiplier(&"debris_value")
 	var chain_mult: float = get_upgrade_total_multiplier(&"chain_bonus") if by_gravity else 1.0
-	return base_val * debris_mult * chain_mult * permanent_multiplier
+	var diff_mult: float = get_difficulty_payout_multiplier()
+	return base_val * debris_mult * chain_mult * diff_mult * permanent_multiplier
 
-func reset_for_new_career() -> void:
-	SaveManager.reset_career_save()
+func reset_for_new_career(difficulty_id: String = "") -> void:
+	SaveManager.reset_career_save(difficulty_id)
 	_sync_from_save()
+	EventBus.difficulty_changed.emit(current_difficulty)
 	EventBus.currency_changed.emit(current_money, 0.0)
 	EventBus.tier_unlocked.emit(unlocked_tier)
 	var start_tool: ToolData = get_tool_data(&"crowbar")

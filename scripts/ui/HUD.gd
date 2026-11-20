@@ -36,6 +36,8 @@ const HOTBAR_SHORT_NAMES: Dictionary = {
 	&"remote_detonator": "Deton."
 }
 
+const RESET_HOLD_DURATION: float = 1.2
+
 var current_completion_available: bool = false
 var notification_tween: Tween
 var _hovered_block: DestructibleBlock = null
@@ -50,6 +52,10 @@ var _target_money: float = 0.0
 var _accumulated_delta: float = 0.0
 var _delta_fade_timer: float = 0.0
 var _money_punch_tween: Tween = null
+
+# Protezione anti-reset accidentale su tasto [R]
+var _reset_hold_timer: float = 0.0
+var _reset_triggered: bool = false
 
 func _ready() -> void:
 	completion_banner.visible = false
@@ -71,6 +77,8 @@ func _ready() -> void:
 	EventBus.upgrade_purchased.connect(_on_upgrade_purchased)
 	EventBus.tier_unlocked.connect(_on_tier_or_prestige_changed)
 	EventBus.prestige_performed.connect(_on_prestige_performed)
+	EventBus.difficulty_changed.connect(_on_difficulty_changed)
+	EventBus.floor_cleared.connect(_on_floor_cleared)
 	EventBus.target_block_hovered.connect(_on_target_block_hovered)
 	EventBus.block_damaged.connect(_on_block_damaged_feedback)
 	EventBus.explosives_count_changed.connect(_on_explosives_count_changed)
@@ -210,6 +218,8 @@ func _process(delta: float) -> void:
 			money_delta_label.modulate.a = clampf(_delta_fade_timer / 0.35, 0.0, 1.0)
 
 	if GameManager.is_any_ui_open():
+		_reset_hold_timer = 0.0
+		_reset_triggered = false
 		return
 
 	if current_completion_available and Input.is_action_just_pressed("interact"):
@@ -217,8 +227,23 @@ func _process(delta: float) -> void:
 		current_completion_available = false
 		completion_banner.visible = false
 
-	if Input.is_action_just_pressed("reset_site"):
-		GameManager.restart_current_contract()
+	# Reset cantiere solo tenendo premuto [R] per 1.2s (impedisce reset accidentali!)
+	if Input.is_action_pressed("reset_site"):
+		if not _reset_triggered:
+			_reset_hold_timer += delta
+			var pct: int = clampi(int((_reset_hold_timer / RESET_HOLD_DURATION) * 100.0), 0, 100)
+			notification_label.visible = true
+			notification_label.modulate = Color(1.0, 0.72, 0.25, 1.0)
+			notification_label.text = "Tieni premuto [R] per ricostruire il Grattacielo... %d%%" % pct
+			if _reset_hold_timer >= RESET_HOLD_DURATION:
+				_reset_triggered = true
+				_reset_hold_timer = 0.0
+				GameManager.restart_current_contract()
+	else:
+		if _reset_hold_timer > 0.0 and not _reset_triggered:
+			notification_label.visible = false
+		_reset_hold_timer = 0.0
+		_reset_triggered = false
 
 	if is_instance_valid(_hovered_block) and not _hovered_block.is_destroyed:
 		_refresh_target_inspector(_hovered_block)
@@ -271,7 +296,16 @@ func _on_currency_changed(new_amount: float, delta_val: float) -> void:
 	_money_punch_tween.tween_property(money_label, "scale", Vector2.ONE, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 func _update_meta_badges() -> void:
-	tier_label.text = "LICENZA TIER %d" % EconomyManager.unlocked_tier
+	var cfg: Dictionary = EconomyManager.get_difficulty_config()
+	var d_id: String = String(cfg.get("id", "easy"))
+	tier_label.text = "%s  •  %d PIANI" % [String(cfg.get("label", "FACILE")), int(cfg.get("floors", 4))]
+	if d_id == "hardcore":
+		tier_label.add_theme_color_override("font_color", Color(1.0, 0.42, 0.34))
+	elif d_id == "normal":
+		tier_label.add_theme_color_override("font_color", Color(0.98, 0.76, 0.22))
+	else:
+		tier_label.add_theme_color_override("font_color", Color(0.34, 0.94, 0.52))
+
 	if EconomyManager.prestige_count > 0 or EconomyManager.permanent_multiplier > 1.01:
 		prestige_badge.visible = true
 		prestige_badge.text = "• PRESTIGIO x%.1f" % EconomyManager.permanent_multiplier
@@ -279,15 +313,34 @@ func _update_meta_badges() -> void:
 		prestige_badge.visible = false
 
 func _update_contract_header() -> void:
-	if GameManager.current_contract:
+	var cfg: Dictionary = EconomyManager.get_difficulty_config()
+	if GameManager.current_contract and GameManager.current_contract.contract_id == &"tier5_skyscraper":
+		contract_title_label.text = "%s  •  %s (%d PIANI)" % [
+			GameManager.current_contract.title.to_upper(),
+			String(cfg.get("label", "FACILE")),
+			int(cfg.get("floors", 4))
+		]
+	elif GameManager.current_contract:
 		contract_title_label.text = "TIER %d  —  %s" % [GameManager.current_contract.tier, GameManager.current_contract.title.to_upper()]
 	else:
-		contract_title_label.text = "CANTIERE ATTIVO"
+		contract_title_label.text = "TORRE SKYLINE ARREDATA"
 
 func _on_contract_selected(_contract: ContractData) -> void:
 	current_completion_available = false
 	completion_banner.visible = false
 	_update_contract_header()
+
+func _on_difficulty_changed(_diff_id: String) -> void:
+	_update_meta_badges()
+	_update_contract_header()
+	_refresh_hotbar()
+	_update_tool_display()
+
+func _on_floor_cleared(floor_index: int, floor_name: String, bonus_money: float) -> void:
+	show_notification(
+		"PIANO %d SGOMBERATO (%s)! BONUS +%s" % [floor_index + 1, floor_name, _format_euros(bonus_money)],
+		Color(0.34, 0.98, 0.56)
+	)
 
 func _on_progress_updated(ratio: float, destroyed_mass: float, total_mass: float) -> void:
 	var percent: float = ratio * 100.0
@@ -301,8 +354,8 @@ func _on_contract_threshold_reached(contract: ContractData) -> void:
 		return
 	current_completion_available = true
 	completion_banner.visible = true
-	var final_bonus: float = EconomyManager.get_contract_bonus(contract) if contract else 150.0
-	completion_label.text = "SOGLIA RAGGIUNTA! Premi [E] per Incassare %s (o demolisci il resto)" % _format_euros(final_bonus)
+	var final_bonus: float = EconomyManager.get_contract_bonus(contract) if contract else 16000.0
+	completion_label.text = "GRATTACIELO ABBATTIUTO! Premi [E] per Incassare %s (o demolisci fino al 100%%)" % _format_euros(final_bonus)
 
 func _on_contract_completed(_contract: ContractData) -> void:
 	completion_banner.visible = false
@@ -330,7 +383,7 @@ func _on_prestige_performed(_count: int, _mult: float) -> void:
 
 func _on_explosives_count_changed(count: int) -> void:
 	c4_badge.visible = count > 0
-	c4_badge.text = "C4 ARMATI: %d  ([7] Detonatore)" % count
+	c4_badge.text = "C4 ARMATI: %d  ([F] o [7] Detona)" % count
 	_update_tool_display()
 
 func _on_target_block_hovered(block: Node3D) -> void:
@@ -345,7 +398,9 @@ func _on_target_block_hovered(block: Node3D) -> void:
 func _refresh_target_inspector(block: DestructibleBlock) -> void:
 	target_inspector.visible = true
 	var mat: MaterialData = block.material_data
-	var m_name: String = mat.display_name if mat else "Struttura"
+	var m_name: String = block.get_display_label()
+	if block.floor_index >= 0:
+		m_name = "%s  (P%d)" % [m_name, block.floor_index + 1]
 	var m_tier: int = mat.hardness_tier if mat else 1
 
 	target_mat_name.text = m_name
@@ -357,7 +412,7 @@ func _refresh_target_inspector(block: DestructibleBlock) -> void:
 	var pen: int = player.equipped_tool.hardness_penetration if (player and player.equipped_tool) else 1
 	if pen < m_tier:
 		target_warn_label.visible = true
-		target_warn_label.text = "DUREZZA INSUFFICIENTE • SERVE TIER %d" % m_tier
+		target_warn_label.text = "SERVE STRUMENTO T%d  •  Sblocca in [K]" % m_tier
 		_set_crosshair_color(Color(1.0, 0.30, 0.25, 0.95))
 	else:
 		target_warn_label.visible = false
@@ -391,12 +446,12 @@ func _update_tool_display() -> void:
 	var actual_reach: float = tool_data.reach_distance * reach_mult
 
 	if tool_data.behavior_type == ToolData.BehaviorType.REMOTE_DETONATOR:
-		tool_stats_label.text = "Innesco a Catena  |  Cariche Attive: %d" % GameManager.get_active_explosives_count()
+		tool_stats_label.text = "Innesco a Catena [LMB / F]  |  Cariche: %d" % GameManager.get_active_explosives_count()
 	elif tool_data.behavior_type == ToolData.BehaviorType.EXPLOSIVE_PLACED:
 		var c4_cost: int = int(EconomyManager.get_c4_unit_cost())
 		var c4_rad: float = tool_data.aoe_radius * aoe_mult
 		var c4_dmg: float = tool_data.base_damage * EconomyManager.get_c4_damage_multiplier()
-		tool_stats_label.text = "Costo: €%d/carica  |  Raggio: %.1fm  |  DMG: %.0f" % [c4_cost, c4_rad, c4_dmg]
+		tool_stats_label.text = "€%d/carica  |  Raggio %.1fm  |  DMG %.0f  |  RMB/F Detona" % [c4_cost, c4_rad, c4_dmg]
 	else:
 		var aoe_str: String = "  |  AoE %.1fm" % (tool_data.aoe_radius * aoe_mult) if tool_data.aoe_radius > 0.0 else ""
 		tool_stats_label.text = "DMG: %.0f  |  T%d  |  %.2fs  |  %.1fm%s" % [
@@ -419,7 +474,7 @@ func show_notification(message: String, color: Color = Color.WHITE) -> void:
 
 	notification_tween = create_tween()
 	notification_label.modulate.a = 1.0
-	notification_tween.tween_interval(2.4)
+	notification_tween.tween_interval(2.6)
 	notification_tween.tween_property(notification_label, "modulate:a", 0.0, 0.42)
 	notification_tween.tween_callback(func():
 		if is_instance_valid(notification_label):

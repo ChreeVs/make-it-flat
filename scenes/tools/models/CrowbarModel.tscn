@@ -1,72 +1,88 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Texture2D" path="res://assets/textures/tex_painted_metal.png" id="1_paint"]
 [ext_resource type="Texture2D" path="res://assets/textures/tex_dark_steel.png" id="2_steel"]
 
-[sub_resource type="StandardMaterial3D" id="Mat_Paint"]
+[sub_resource type="StandardMaterial3D" id="Mat_Red"]
+albedo_color = Color(0.86, 0.17, 0.13, 1)
 albedo_texture = ExtResource("1_paint")
-metallic = 0.65
-roughness = 0.38
-uv1_scale = Vector3(1, 5, 1)
+metallic = 0.48
+roughness = 0.36
 
 [sub_resource type="StandardMaterial3D" id="Mat_Steel"]
 albedo_texture = ExtResource("2_steel")
-metallic = 0.92
-roughness = 0.28
+metallic = 0.94
+roughness = 0.24
 
 [sub_resource type="StandardMaterial3D" id="Mat_Grip"]
-albedo_color = Color(0.11, 0.12, 0.13, 1)
+albedo_color = Color(0.10, 0.11, 0.13, 1)
 roughness = 0.92
 
-[sub_resource type="CylinderMesh" id="Mesh_Shaft"]
-top_radius = 0.019
-bottom_radius = 0.019
+[sub_resource type="CylinderMesh" id="Mesh_Bar"]
+top_radius = 0.015
+bottom_radius = 0.016
 height = 0.56
 radial_segments = 6
 
 [sub_resource type="CylinderMesh" id="Mesh_Grip"]
-top_radius = 0.024
-bottom_radius = 0.025
-height = 0.18
-radial_segments = 8
+top_radius = 0.020
+bottom_radius = 0.021
+height = 0.19
+radial_segments = 10
+
+[sub_resource type="CylinderMesh" id="Mesh_Rib"]
+top_radius = 0.022
+bottom_radius = 0.022
+height = 0.014
+radial_segments = 10
 
 [sub_resource type="BoxMesh" id="Mesh_Neck"]
-size = Vector3(0.032, 0.032, 0.11)
+size = Vector3(0.032, 0.095, 0.024)
 
-[sub_resource type="BoxMesh" id="Mesh_Claw"]
-size = Vector3(0.014, 0.014, 0.095)
+[sub_resource type="BoxMesh" id="Mesh_Prong"]
+size = Vector3(0.011, 0.020, 0.11)
 
 [sub_resource type="BoxMesh" id="Mesh_Chisel"]
-size = Vector3(0.044, 0.012, 0.09)
+size = Vector3(0.034, 0.085, 0.014)
 
 [node name="CrowbarModel" type="Node3D"]
 
 [node name="Shaft" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, -4.37114e-08, -1, 0, 1, -4.37114e-08, 0, 0, -0.14)
-mesh = SubResource("Mesh_Shaft")
-surface_material_override/0 = SubResource("Mat_Paint")
+transform = Transform3D(1, 0, 0, 0, 0.743145, 0.669131, 0, -0.669131, 0.743145, 0, -0.05, -0.17)
+mesh = SubResource("Mesh_Bar")
+surface_material_override/0 = SubResource("Mat_Red")
 
-[node name="RubberGrip" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, -4.37114e-08, -1, 0, 1, -4.37114e-08, 0, 0, 0.02)
+[node name="RubberGrip" type="MeshInstance3D" parent="Shaft"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.10, 0)
 mesh = SubResource("Mesh_Grip")
 surface_material_override/0 = SubResource("Mat_Grip")
 
-[node name="HookBend" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.707107, -0.707107, 0, 0.707107, 0.707107, 0, 0.038, -0.45)
+[node name="GripRibTop" type="MeshInstance3D" parent="Shaft"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, 0)
+mesh = SubResource("Mesh_Rib")
+surface_material_override/0 = SubResource("Mat_Grip")
+
+[node name="GripRibBot" type="MeshInstance3D" parent="Shaft"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.18, 0)
+mesh = SubResource("Mesh_Rib")
+surface_material_override/0 = SubResource("Mat_Grip")
+
+[node name="HookNeck" type="MeshInstance3D" parent="Shaft"]
+transform = Transform3D(1, 0, 0, 0, 0.707107, -0.707107, 0, 0.707107, 0.707107, 0, 0.295, -0.032)
 mesh = SubResource("Mesh_Neck")
-surface_material_override/0 = SubResource("Mat_Paint")
+surface_material_override/0 = SubResource("Mat_Red")
 
-[node name="ClawLeft" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.173648, -0.984808, 0, 0.984808, 0.173648, -0.014, 0.095, -0.495)
-mesh = SubResource("Mesh_Claw")
+[node name="ClawProngL" type="MeshInstance3D" parent="Shaft"]
+transform = Transform3D(1, 0, 0, 0, 0.906308, -0.422618, 0, 0.422618, 0.906308, -0.011, 0.312, -0.102)
+mesh = SubResource("Mesh_Prong")
 surface_material_override/0 = SubResource("Mat_Steel")
 
-[node name="ClawRight" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.173648, -0.984808, 0, 0.984808, 0.173648, 0.014, 0.095, -0.495)
-mesh = SubResource("Mesh_Claw")
+[node name="ClawProngR" type="MeshInstance3D" parent="Shaft"]
+transform = Transform3D(1, 0, 0, 0, 0.906308, -0.422618, 0, 0.422618, 0.906308, 0.011, 0.312, -0.102)
+mesh = SubResource("Mesh_Prong")
 surface_material_override/0 = SubResource("Mat_Steel")
 
-[node name="RearChisel" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.965926, 0.258819, 0, -0.258819, 0.965926, 0, -0.012, 0.16)
+[node name="BottomChisel" type="MeshInstance3D" parent="Shaft"]
+transform = Transform3D(1, 0, 0, 0, 0.939693, 0.34202, 0, -0.34202, 0.939693, 0, -0.295, 0.015)
 mesh = SubResource("Mesh_Chisel")
 surface_material_override/0 = SubResource("Mat_Steel")

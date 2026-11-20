@@ -94,7 +94,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.98, 0.76, 0.22, 1)
 theme_override_font_sizes/font_size = 21
-text = "OFFICINA STRUMENTI & LICENZE  [B]"
+text = "ARSENALE & PRESTIGIO  [B]"
 
 [node name="MoneyLabel" type="Label" parent="Panel/Margin/VBox/Header"]
 layout_mode = 2
@@ -103,13 +103,15 @@ theme_override_font_sizes/font_size = 18
 text = "Capitale: € 0"
 
 [node name="SkillsSwitchButton" type="Button" parent="Panel/Margin/VBox/Header"]
-custom_minimum_size = Vector2(165, 34)
+custom_minimum_size = Vector2(180, 34)
 layout_mode = 2
-text = "Albero Abilità [K]"
+focus_mode = 0
+text = "Potenziamenti [K]"
 
 [node name="CloseButton" type="Button" parent="Panel/Margin/VBox/Header"]
 custom_minimum_size = Vector2(96, 34)
 layout_mode = 2
+focus_mode = 0
 text = "Chiudi"
 
 [node name="Scroll" type="ScrollContainer" parent="Panel/Margin/VBox"]
@@ -135,19 +137,20 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.88, 0.94, 0.99, 1)
 theme_override_font_sizes/font_size = 13
-text = "Licenza Demolizioni Attiva: TIER 1"
+text = "Modalità Facile • Sblocca strumenti nell'Albero Potenziamenti [K]"
 autowrap_mode = 3
 
 [node name="LicenseButton" type="Button" parent="Panel/Margin/VBox/Scroll/ContentVBox/LicensePanel/LicenseHBox"]
 custom_minimum_size = Vector2(210, 40)
 layout_mode = 2
-text = "Licenza Tier 2 (€ 900)"
+focus_mode = 0
+text = "Apri Albero Abilità [K]"
 
 [node name="ToolsTitle" type="Label" parent="Panel/Margin/VBox/Scroll/ContentVBox"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.98, 0.76, 0.22, 1)
 theme_override_font_sizes/font_size = 14
-text = "ARSENALE DI DEMOLIZIONE (Tasti 1–7 • Ogni carica C4 piazzata ha un costo in Euro)"
+text = "ARSENALE DI DEMOLIZIONE (Tasti 1–7 • Sbloccati potenziando l'Albero Abilità [K])"
 
 [node name="ToolsList" type="GridContainer" parent="Panel/Margin/VBox/Scroll/ContentVBox"]
 layout_mode = 2

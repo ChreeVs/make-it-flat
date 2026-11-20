@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=15 format=3]
 
 [ext_resource type="Texture2D" path="res://assets/textures/tex_c4_block.png" id="1_c4"]
 [ext_resource type="Texture2D" path="res://assets/textures/tex_dark_steel.png" id="2_steel"]
@@ -7,63 +7,86 @@
 albedo_texture = ExtResource("1_c4")
 roughness = 0.72
 
-[sub_resource type="StandardMaterial3D" id="Mat_Module"]
+[sub_resource type="StandardMaterial3D" id="Mat_Strap"]
+albedo_color = Color(0.10, 0.11, 0.12, 1)
+roughness = 0.88
+
+[sub_resource type="StandardMaterial3D" id="Mat_Metal"]
 albedo_texture = ExtResource("2_steel")
-metallic = 0.85
-roughness = 0.35
+metallic = 0.88
+roughness = 0.30
 
-[sub_resource type="StandardMaterial3D" id="Mat_RedLED"]
-shading_mode = 0
-albedo_color = Color(1.0, 0.14, 0.10, 1)
+[sub_resource type="StandardMaterial3D" id="Mat_WireRed"]
+albedo_color = Color(0.92, 0.16, 0.12, 1)
+roughness = 0.42
 
-[sub_resource type="StandardMaterial3D" id="Mat_LCD"]
-shading_mode = 0
-albedo_color = Color(0.15, 0.95, 0.35, 1)
+[sub_resource type="StandardMaterial3D" id="Mat_ArmedLED"]
+albedo_color = Color(1.0, 0.18, 0.10, 1)
+emission_enabled = true
+emission = Color(1.0, 0.16, 0.08, 1)
+emission_energy_multiplier = 2.2
+
+[sub_resource type="StandardMaterial3D" id="Mat_Screen"]
+albedo_color = Color(0.14, 0.88, 0.36, 1)
+emission_enabled = true
+emission = Color(0.14, 0.88, 0.36, 1)
+emission_energy_multiplier = 1.1
 
 [sub_resource type="BoxMesh" id="Mesh_Brick"]
-size = Vector3(0.24, 0.11, 0.14)
+size = Vector3(0.22, 0.12, 0.095)
 
-[sub_resource type="BoxMesh" id="Mesh_Receiver"]
-size = Vector3(0.11, 0.032, 0.075)
+[sub_resource type="BoxMesh" id="Mesh_Strap"]
+size = Vector3(0.028, 0.126, 0.102)
 
-[sub_resource type="CylinderMesh" id="Mesh_Antenna"]
-top_radius = 0.004
-bottom_radius = 0.006
-height = 0.16
-radial_segments = 8
+[sub_resource type="BoxMesh" id="Mesh_TimerBox"]
+size = Vector3(0.095, 0.068, 0.024)
+
+[sub_resource type="BoxMesh" id="Mesh_LCD"]
+size = Vector3(0.068, 0.032, 0.008)
 
 [sub_resource type="SphereMesh" id="Mesh_LED"]
 radius = 0.011
 height = 0.022
 
+[sub_resource type="CylinderMesh" id="Mesh_Cap"]
+top_radius = 0.010
+bottom_radius = 0.010
+height = 0.075
+radial_segments = 10
+
 [node name="C4Model" type="Node3D"]
 
-[node name="Brick" type="MeshInstance3D" parent="."]
+[node name="ExplosiveBrick" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.965926, 0, -0.258819, 0, 1, 0, 0.258819, 0, 0.965926, 0, -0.02, -0.14)
 mesh = SubResource("Mesh_Brick")
 surface_material_override/0 = SubResource("Mat_C4")
 
-[node name="ReceiverBox" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.070, 0)
-mesh = SubResource("Mesh_Receiver")
-surface_material_override/0 = SubResource("Mat_Module")
+[node name="StrapL" type="MeshInstance3D" parent="ExplosiveBrick"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.068, 0, 0)
+mesh = SubResource("Mesh_Strap")
+surface_material_override/0 = SubResource("Mat_Strap")
 
-[node name="DisplayStrip" type="MeshInstance3D" parent="ReceiverBox"]
-transform = Transform3D(0.42, 0, 0, 0, 0.18, 0, 0, 0, 0.45, -0.022, 0.016, 0)
-mesh = SubResource("Mesh_Receiver")
-surface_material_override/0 = SubResource("Mat_LCD")
+[node name="StrapR" type="MeshInstance3D" parent="ExplosiveBrick"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.068, 0, 0)
+mesh = SubResource("Mesh_Strap")
+surface_material_override/0 = SubResource("Mat_Strap")
 
-[node name="LedBulb" type="MeshInstance3D" parent="ReceiverBox"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.032, 0.020, 0.014)
+[node name="TimerModule" type="MeshInstance3D" parent="ExplosiveBrick"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.006, 0.056)
+mesh = SubResource("Mesh_TimerBox")
+surface_material_override/0 = SubResource("Mat_Metal")
+
+[node name="ScreenLCD" type="MeshInstance3D" parent="ExplosiveBrick/TimerModule"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.008, 0.013)
+mesh = SubResource("Mesh_LCD")
+surface_material_override/0 = SubResource("Mat_Screen")
+
+[node name="ArmedLED" type="MeshInstance3D" parent="ExplosiveBrick/TimerModule"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.032, -0.018, 0.014)
 mesh = SubResource("Mesh_LED")
-surface_material_override/0 = SubResource("Mat_RedLED")
+surface_material_override/0 = SubResource("Mat_ArmedLED")
 
-[node name="Antenna" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.044, 0.15, -0.02)
-mesh = SubResource("Mesh_Antenna")
-surface_material_override/0 = SubResource("Mat_Module")
-
-[node name="OmniLight3D" type="OmniLight3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.032, 0.11, 0.014)
-light_color = Color(1, 0.12, 0.08, 1)
-light_energy = 1.2
-omni_range = 1.2
+[node name="DetonatorCap" type="MeshInstance3D" parent="ExplosiveBrick"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.052, 0.062, 0.01)
+mesh = SubResource("Mesh_Cap")
+surface_material_override/0 = SubResource("Mat_WireRed")

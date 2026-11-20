@@ -7,9 +7,9 @@
 script = ExtResource("1_script")
 contract_id = &"tier5_skyscraper"
 tier = 5
-title = "Grattacielo Direzionale & Eliporto"
-description = "Grattacielo Skyline con facciate vetrate continue, vano scale interno su 3 livelli fino all eliporto e 4 mega-colonne in acciaio."
+title = "Torre Horizon — Grattacielo Arredato"
+description = "Grattacielo multipiano interamente arredato: Hall & Bar, Uffici & Bagni, Appartamenti, Ristorante Panoramico, Suite VIP, Sala Server e Eliporto."
 structure_scene = ExtResource("2_scene")
 completion_threshold = 0.88
-completion_bonus = 48000.0
+completion_bonus = 28000.0
 required_capital = 0.0

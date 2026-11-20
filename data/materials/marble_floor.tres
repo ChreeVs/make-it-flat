@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="MaterialData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/MaterialData.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/textures/tex_mat_marble.png" id="2_albedo"]
+
+[resource]
+script = ExtResource("1_script")
+material_id = &"marble_floor"
+display_name = "Marmo & Granito"
+hardness_tier = 2
+max_hp = 155.0
+mass_kg = 78.0
+base_money_value = 68.0
+is_composite = false
+color = Color(0.96, 0.95, 0.92, 1.0)
+dust_color = Color(0.84, 0.83, 0.80, 1.0)
+albedo_texture = ExtResource("2_albedo")
+roughness = 0.28
+metallic = 0.08
+uv_scale = Vector3(1.0, 1.0, 1.0)

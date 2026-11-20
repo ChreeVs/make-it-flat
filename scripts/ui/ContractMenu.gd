@@ -81,15 +81,6 @@ func _load_contracts() -> void:
 		if ResourceLoader.exists(p):
 			contracts_data.append(load(p))
 
-func _unhandled_input(event: InputEvent) -> void:
-	if GameManager.is_main_menu_open or GameManager.is_pause_menu_open:
-		return
-	if event.is_action_pressed("toggle_contracts"):
-		if visible:
-			close_menu()
-		else:
-			open_menu()
-
 func open_menu() -> void:
 	GameManager.close_gameplay_overlays("ContractMenu")
 	visible = true

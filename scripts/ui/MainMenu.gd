@@ -2,6 +2,11 @@ class_name MainMenu
 extends Control
 
 @onready var title_screen: Control = $TitleScreen
+@onready var easy_btn: Button = $TitleScreen/SideBar/VBox/DifficultyBox/DiffVBox/DiffButtons/EasyBtn
+@onready var normal_btn: Button = $TitleScreen/SideBar/VBox/DifficultyBox/DiffVBox/DiffButtons/NormalBtn
+@onready var hardcore_btn: Button = $TitleScreen/SideBar/VBox/DifficultyBox/DiffVBox/DiffButtons/HardcoreBtn
+@onready var diff_subtitle: Label = $TitleScreen/SideBar/VBox/DifficultyBox/DiffVBox/DiffSubtitle
+
 @onready var career_summary: PanelContainer = $TitleScreen/SideBar/VBox/CareerSummary
 @onready var summary_text: Label = $TitleScreen/SideBar/VBox/CareerSummary/SummaryText
 @onready var continue_btn: Button = $TitleScreen/SideBar/VBox/ContinueButton
@@ -27,23 +32,35 @@ extends Control
 
 const INTRO_STEPS: Array[Dictionary] = [
 	{
-		"title": "1. Demolisci con Strategia & Fisica Reale",
-		"body": "Sei il capo-cantiere di una ditta di demolizioni in prima persona.\n\n• Ogni edificio è costruito con pilastri portanti, solette, vetrate, tetti e SCALE INTERNE PERCORRIBILI: entra nelle strutture, sali ai piani superiori e studia i punti deboli.\n• Abbatti i pilastri alla base per far collassare l'intera struttura in un crollo a catena e incassare bonus enormi.\n• Raggiunta la soglia dell'88%, i pochi blocchi residui si illuminano a raggi X e puoi premere [E] per riscuotere il premio commessa."
+		"title": "1. Il Grattacielo Interamente Arredato",
+		"body": "La tua missione: radere al suolo un gigantesco grattacielo multipiano nel cuore del distretto metropolitano!\n\n• Ogni piano è arredato da cima a fondo: Lobby & Bar con bancone e sgabelli, Uffici con scrivanie e PC, Bagni completi di WC/lavandini/vasche, Appartamenti con letti, cucine e divani, Ristorante Panoramico, Suite VIP e Sala Server.\n• Usa le ampie SCALE INTERNE per salire fino al tetto. Sgomberare ogni piano all'84% assegna un ricco BONUS DI PIANO, mentre abbattere i pilastri portanti a terra scatena crolli a catena!"
 	},
 	{
-		"title": "2. Economia, Albero Abilità & Costo del C4",
-		"body": "Ogni blocco demolito aumenta il tuo capitale in tempo reale:\n\n• Premi [K] per aprire l'ALBERO DELLE ABILITÀ a 3 rami (Potenza & C4, Economia & Fisica, Mobilità & Drone).\n• Premi [B] per l'OFFICINA STRUMENTI e le Licenze Tier 2–5.\n• Attenzione al C4: è devastante contro cemento armato e acciaio, ma OGNI CARICA PIAZZATA COSTA DENARO (€180 base, scontabile nell'Albero Abilità)! Piazzalo con intelligenza sui pilastri chiave e innesca con il Detonatore [7]."
+		"title": "2. Potenzia le Abilità per Sbloccare Strumenti",
+		"body": "Ogni mobile, vetrata o parete distrutta ti fa guadagnare denaro in tempo reale:\n\n• Apri l'ALBERO DELLE ABILITÀ con [K] o [TAB]: potenziando i nodi sblocchi AUTOMATICAMENTE tutto l'arsenale!\n  ★ Forza Lv.1 → Martello [2]  •  Ritmo Lv.1/Lv.3 → Mazze 3kg [3] & 8kg [4]\n  ★ Onda d'Urto Lv.1 → Demolitore Elettrico [5] (T3)  •  Esplosivista Lv.1 → C4 [6] + Detonatore [7] (T4)\n  ★ Drone Laser Lv.1 → Drone autonomo aereo! (Ogni carica C4 ha un costo operativo per evitare spam gratuito.)\n• In modalità FACILE i guadagni sono bilanciati per sbloccare e potenziare TUTTO in una sola demolizione!"
 	},
 	{
-		"title": "3. Comandi Principali di Cantiere",
-		"body": "• WASD + SHIFT + SPAZIO: Muoviti, corri, salta e sali le scale interne degli edifici\n• CLICK SINISTRO: Colpisci / Demolisci / Piazza C4 / Detona\n• TASTI [1–7] o ROTELLINA MOUSE: Cambia strumento equipaggiato\n• [B] Officina Strumenti   •   [K] Albero Abilità   •   [C] Commesse\n• [E] Incassa Premio Commessa (oltre l'88%)   •   [R] Ripristina Cantiere\n• [ESC] Menu Pausa & Impostazioni (Audio, Mouse, FOV, Grafica)"
+		"title": "3. Comandi Completi & Precisi",
+		"body": "• WASD + SHIFT + SPAZIO: Muoviti, corri, salta e sali fluidamente le scale interne\n• CTRL o [C]: Accovacciati per passare sotto macerie e colpire i pilastri bassi\n• CLICK SINISTRO: Colpisci / Demolisci continuo / Piazza carica C4\n• CLICK DESTRO: Colpo Pesante (1.65x danno + mini AoE) oppure Detona subito i C4\n• [1–7] / ROTELLINA / [Q]: Cambia strumento (o scambia rapidamente con l'ultimo usato)\n• [F]: Detona istantaneamente tutti i C4 armati da qualsiasi strumento!\n• [K] o [TAB] Albero Potenziamenti  •  [B] Arsenale & Prestigio  •  [E] Incassa Premio Torre (≥88%)\n• TIENI PREMUTO [R] (1.2s): Ricostruisci il Grattacielo  •  [ESC] Pausa & Impostazioni"
 	}
 ]
 
 var _intro_step: int = 0
 var _start_game_after_intro: bool = false
+var _selected_difficulty: String = "easy"
+var _style_diff_idle: StyleBoxFlat
+var _style_diff_active_easy: StyleBoxFlat
+var _style_diff_active_normal: StyleBoxFlat
+var _style_diff_active_hard: StyleBoxFlat
 
 func _ready() -> void:
+	_init_diff_styles()
+	_selected_difficulty = EconomyManager.current_difficulty
+
+	easy_btn.pressed.connect(func(): _select_difficulty("easy"))
+	normal_btn.pressed.connect(func(): _select_difficulty("normal"))
+	hardcore_btn.pressed.connect(func(): _select_difficulty("hardcore"))
+
 	continue_btn.pressed.connect(_on_continue_pressed)
 	new_game_btn.pressed.connect(_on_new_game_pressed)
 	intro_btn.pressed.connect(func(): open_intro(false))
@@ -62,6 +79,62 @@ func _ready() -> void:
 
 	open_title_screen()
 
+func _init_diff_styles() -> void:
+	_style_diff_idle = StyleBoxFlat.new()
+	_style_diff_idle.bg_color = Color(0.10, 0.125, 0.165, 0.92)
+	_style_diff_idle.border_width_left = 1
+	_style_diff_idle.border_width_top = 1
+	_style_diff_idle.border_width_right = 1
+	_style_diff_idle.border_width_bottom = 1
+	_style_diff_idle.border_color = Color(0.26, 0.32, 0.42, 0.85)
+	_style_diff_idle.set_corner_radius_all(5)
+
+	_style_diff_active_easy = _make_active_diff_style(Color(0.08, 0.24, 0.15, 0.98), Color(0.32, 0.94, 0.52, 1.0))
+	_style_diff_active_normal = _make_active_diff_style(Color(0.24, 0.18, 0.06, 0.98), Color(0.98, 0.74, 0.18, 1.0))
+	_style_diff_active_hard = _make_active_diff_style(Color(0.26, 0.08, 0.08, 0.98), Color(0.98, 0.36, 0.30, 1.0))
+
+func _make_active_diff_style(bg: Color, border: Color) -> StyleBoxFlat:
+	var s := StyleBoxFlat.new()
+	s.bg_color = bg
+	s.border_width_left = 2
+	s.border_width_top = 2
+	s.border_width_right = 2
+	s.border_width_bottom = 2
+	s.border_color = border
+	s.set_corner_radius_all(5)
+	return s
+
+func _select_difficulty(diff_id: String) -> void:
+	EventBus.ui_click.emit()
+	_selected_difficulty = diff_id
+	if EconomyManager.current_difficulty != diff_id:
+		EconomyManager.set_difficulty(diff_id)
+		# Ricarica in tempo reale il grattacielo dietro la telecamera orbitale!
+		GameManager.load_skyscraper_for_difficulty()
+	_refresh_difficulty_ui()
+
+func _refresh_difficulty_ui() -> void:
+	var cfg: Dictionary = EconomyManager.DIFFICULTIES.get(_selected_difficulty, EconomyManager.DIFFICULTIES["easy"])
+	diff_subtitle.text = String(cfg.get("subtitle", ""))
+
+	var pairs := [
+		["easy", easy_btn, _style_diff_active_easy],
+		["normal", normal_btn, _style_diff_active_normal],
+		["hardcore", hardcore_btn, _style_diff_active_hard]
+	]
+	for p in pairs:
+		var is_sel: bool = (_selected_difficulty == p[0])
+		var btn: Button = p[1]
+		var st: StyleBoxFlat = p[2] if is_sel else _style_diff_idle
+		btn.add_theme_stylebox_override("normal", st)
+		btn.add_theme_stylebox_override("hover", p[2])
+		btn.add_theme_stylebox_override("pressed", p[2])
+
+	new_game_btn.text = "INIZIA PARTITA  (%s • %d PIANI)" % [
+		String(cfg.get("label", "FACILE")),
+		int(cfg.get("floors", 4))
+	]
+
 func open_title_screen() -> void:
 	GameManager.close_gameplay_overlays()
 	GameManager.is_main_menu_open = true
@@ -74,15 +147,21 @@ func open_title_screen() -> void:
 	intro_overlay.visible = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
+	_selected_difficulty = EconomyManager.current_difficulty
+	_refresh_difficulty_ui()
+
 	var has_save: bool = SaveManager.has_existing_career()
 	continue_btn.visible = has_save
 	career_summary.visible = has_save
 	if has_save:
-		var completed: int = SaveManager.save_data.get("completed_contracts", []).size()
-		summary_text.text = "Carriera Salvata  •  Capitale: € %d  •  Licenza Tier %d\nCommesse completate: %d  •  Prestigio: x%.1f" % [
+		var cfg: Dictionary = EconomyManager.get_difficulty_config()
+		var tools_cnt: int = EconomyManager.unlocked_tools.size()
+		summary_text.text = "Carriera Attiva (%s • %d Piani)  •  Capitale: € %d\nStrumenti Sbloccati: %d / %d  •  Prestigio: x%.1f" % [
+			String(cfg.get("label", "FACILE")),
+			int(cfg.get("floors", 4)),
 			int(EconomyManager.current_money),
-			EconomyManager.unlocked_tier,
-			completed,
+			tools_cnt,
+			EconomyManager.TOOL_ORDER.size(),
 			EconomyManager.permanent_multiplier
 		]
 
@@ -94,11 +173,8 @@ func _on_continue_pressed() -> void:
 
 func _on_new_game_pressed() -> void:
 	EventBus.ui_click.emit()
-	if SaveManager.has_existing_career():
-		EconomyManager.reset_for_new_career()
-		var t1: ContractData = load("res://data/contracts/tier1_fence.tres")
-		if t1:
-			GameManager.load_contract(t1)
+	EconomyManager.reset_for_new_career(_selected_difficulty)
+	GameManager.load_skyscraper_for_difficulty()
 
 	if not bool(SaveManager.save_data.get("has_seen_intro", false)):
 		open_intro(true)

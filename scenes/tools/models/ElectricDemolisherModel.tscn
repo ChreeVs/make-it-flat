@@ -1,11 +1,13 @@
-[gd_scene load_steps=14 format=3]
+[gd_scene load_steps=16 format=3]
 
 [ext_resource type="Texture2D" path="res://assets/textures/tex_demolisher_body.png" id="1_body"]
 [ext_resource type="Texture2D" path="res://assets/textures/tex_dark_steel.png" id="2_steel"]
+[ext_resource type="Texture2D" path="res://assets/textures/tex_hazard_stripes.png" id="3_haz"]
 
 [sub_resource type="StandardMaterial3D" id="Mat_Body"]
 albedo_texture = ExtResource("1_body")
 roughness = 0.42
+metallic = 0.28
 
 [sub_resource type="StandardMaterial3D" id="Mat_Steel"]
 albedo_texture = ExtResource("2_steel")
@@ -13,84 +15,87 @@ metallic = 0.94
 roughness = 0.25
 
 [sub_resource type="StandardMaterial3D" id="Mat_Rubber"]
-albedo_color = Color(0.11, 0.12, 0.13, 1)
-roughness = 0.90
+albedo_color = Color(0.09, 0.10, 0.12, 1)
+roughness = 0.92
+
+[sub_resource type="StandardMaterial3D" id="Mat_Hazard"]
+albedo_texture = ExtResource("3_haz")
+roughness = 0.48
 
 [sub_resource type="StandardMaterial3D" id="Mat_LED"]
-shading_mode = 0
-albedo_color = Color(0.2, 1.0, 0.45, 1)
+albedo_color = Color(0.20, 0.98, 0.42, 1)
+emission_enabled = true
+emission = Color(0.20, 0.98, 0.42, 1)
+emission_energy_multiplier = 1.6
 
-[sub_resource type="BoxMesh" id="Mesh_Body"]
-size = Vector3(0.16, 0.19, 0.30)
+[sub_resource type="BoxMesh" id="Mesh_MainBody"]
+size = Vector3(0.145, 0.165, 0.34)
 
-[sub_resource type="BoxMesh" id="Mesh_TopCap"]
-size = Vector3(0.13, 0.04, 0.24)
+[sub_resource type="BoxMesh" id="Mesh_HazardBand"]
+size = Vector3(0.152, 0.055, 0.12)
 
-[sub_resource type="CylinderMesh" id="Mesh_Nose"]
-top_radius = 0.044
-bottom_radius = 0.068
-height = 0.14
-radial_segments = 10
+[sub_resource type="CylinderMesh" id="Mesh_MotorDrum"]
+top_radius = 0.068
+bottom_radius = 0.072
+height = 0.15
+radial_segments = 14
+
+[sub_resource type="BoxMesh" id="Mesh_DHandle"]
+size = Vector3(0.034, 0.165, 0.036)
 
 [sub_resource type="CylinderMesh" id="Mesh_Chuck"]
-top_radius = 0.036
-bottom_radius = 0.042
-height = 0.10
-radial_segments = 8
+top_radius = 0.044
+bottom_radius = 0.052
+height = 0.11
+radial_segments = 12
 
 [sub_resource type="CylinderMesh" id="Mesh_Chisel"]
-top_radius = 0.004
-bottom_radius = 0.020
+top_radius = 0.008
+bottom_radius = 0.022
 height = 0.34
 radial_segments = 6
 
-[sub_resource type="CylinderMesh" id="Mesh_SideGrip"]
-top_radius = 0.017
-bottom_radius = 0.017
-height = 0.18
-radial_segments = 10
-
-[sub_resource type="BoxMesh" id="Mesh_Led"]
-size = Vector3(0.024, 0.012, 0.012)
+[sub_resource type="BoxMesh" id="Mesh_PowerLED"]
+size = Vector3(0.024, 0.016, 0.016)
 
 [node name="ElectricDemolisherModel" type="Node3D"]
 
-[node name="MotorBody" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, -0.18)
-mesh = SubResource("Mesh_Body")
+[node name="Body" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.965926, 0.258819, 0, -0.258819, 0.965926, 0, -0.04, -0.18)
+mesh = SubResource("Mesh_MainBody")
 surface_material_override/0 = SubResource("Mat_Body")
 
-[node name="TopGuard" type="MeshInstance3D" parent="MotorBody"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.105, -0.01)
-mesh = SubResource("Mesh_TopCap")
-surface_material_override/0 = SubResource("Mat_Rubber")
+[node name="HazardCollar" type="MeshInstance3D" parent="Body"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.045, -0.06)
+mesh = SubResource("Mesh_HazardBand")
+surface_material_override/0 = SubResource("Mat_Hazard")
 
-[node name="PowerLED" type="MeshInstance3D" parent="MotorBody"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.045, 0.098, 0.125)
-mesh = SubResource("Mesh_Led")
-surface_material_override/0 = SubResource("Mat_LED")
-
-[node name="GearboxNose" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, -4.37114e-08, -1, 0, 1, -4.37114e-08, 0, -0.02, -0.40)
-mesh = SubResource("Mesh_Nose")
+[node name="MotorHousing" type="MeshInstance3D" parent="Body"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.12, 0.04)
+mesh = SubResource("Mesh_MotorDrum")
 surface_material_override/0 = SubResource("Mat_Steel")
 
-[node name="ChuckCollar" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, -4.37114e-08, -1, 0, 1, -4.37114e-08, 0, -0.02, -0.52)
-mesh = SubResource("Mesh_Chuck")
+[node name="RearHandle" type="MeshInstance3D" parent="Body"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, 0.19)
+mesh = SubResource("Mesh_DHandle")
 surface_material_override/0 = SubResource("Mat_Rubber")
 
-[node name="ChiselBit" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, -4.37114e-08, -1, 0, 1, -4.37114e-08, 0, -0.02, -0.73)
+[node name="SideGrip" type="MeshInstance3D" parent="Body"]
+transform = Transform3D(-4.37114e-08, -1, 0, 1, -4.37114e-08, 0, 0, 0, 1, -0.13, -0.02, -0.09)
+mesh = SubResource("Mesh_DHandle")
+surface_material_override/0 = SubResource("Mat_Rubber")
+
+[node name="Chuck" type="MeshInstance3D" parent="Body"]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, -1, 0, 1, -4.37114e-08, 0, 0.0, -0.22)
+mesh = SubResource("Mesh_Chuck")
+surface_material_override/0 = SubResource("Mat_Steel")
+
+[node name="ChiselBit" type="MeshInstance3D" parent="Body"]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, -1, 0, 1, -4.37114e-08, 0, 0.0, -0.44)
 mesh = SubResource("Mesh_Chisel")
 surface_material_override/0 = SubResource("Mat_Steel")
 
-[node name="SideAuxGrip" type="MeshInstance3D" parent="."]
-transform = Transform3D(-4.37114e-08, -1, 0, 1, -4.37114e-08, 0, 0, 0, 1, -0.14, -0.02, -0.39)
-mesh = SubResource("Mesh_SideGrip")
-surface_material_override/0 = SubResource("Mat_Rubber")
-
-[node name="RearGrip" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.965926, -0.258819, 0, 0.258819, 0.965926, 0, -0.05, 0.03)
-mesh = SubResource("Mesh_SideGrip")
-surface_material_override/0 = SubResource("Mat_Rubber")
+[node name="PowerLED" type="MeshInstance3D" parent="Body"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.055, 0.084, 0.09)
+mesh = SubResource("Mesh_PowerLED")
+surface_material_override/0 = SubResource("Mat_LED")

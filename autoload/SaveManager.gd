@@ -31,7 +31,8 @@ func _notification(what: int) -> void:
 
 func _get_default_save() -> Dictionary:
 	return {
-		"version": 2,
+		"version": 3,
+		"difficulty": "easy",
 		"has_seen_intro": false,
 		"money": 0.0,
 		"total_earned": 0.0,
@@ -56,7 +57,8 @@ func _get_default_save() -> Dictionary:
 		"stats": {
 			"blocks_destroyed": 0,
 			"mass_demolished_kg": 0.0,
-			"contracts_completed": 0
+			"contracts_completed": 0,
+			"floors_cleared": 0
 		}
 	}
 
@@ -98,6 +100,7 @@ func save_game() -> void:
 			clean_contracts.append(cs)
 	save_data["completed_contracts"] = clean_contracts
 	save_data["equipped_tool"] = String(save_data.get("equipped_tool", "crowbar"))
+	save_data["difficulty"] = String(save_data.get("difficulty", "easy"))
 
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file:
@@ -158,14 +161,20 @@ func apply_settings() -> void:
 		AudioServer.set_bus_volume_db(bus_idx, linear_to_db(maxf(vol, 0.005)))
 	EventBus.settings_changed.emit()
 
-func reset_career_save() -> void:
+func reset_career_save(difficulty_id: String = "") -> void:
+	var keep_diff: String = difficulty_id if difficulty_id != "" else String(save_data.get("difficulty", "easy"))
+	var seen_intro: bool = bool(save_data.get("has_seen_intro", false))
 	save_data = _get_default_save()
+	save_data["difficulty"] = keep_diff
+	save_data["has_seen_intro"] = seen_intro
 	_dirty = false
 	save_game()
 
 func reset_save_for_prestige(new_prestige_count: int, new_multiplier: float) -> void:
 	var old_stats: Dictionary = save_data.get("stats", {}).duplicate(true)
+	var keep_diff: String = String(save_data.get("difficulty", "normal"))
 	save_data = _get_default_save()
+	save_data["difficulty"] = keep_diff
 	save_data["has_seen_intro"] = true
 	save_data["prestige_count"] = new_prestige_count
 	save_data["permanent_multiplier"] = new_multiplier

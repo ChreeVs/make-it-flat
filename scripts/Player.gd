@@ -3,21 +3,30 @@ extends CharacterBody3D
 
 @export var base_walk_speed: float = 5.4
 @export var base_sprint_speed: float = 8.4
-@export var base_jump_velocity: float = 5.3
+@export var base_crouch_speed: float = 3.0
+@export var base_jump_velocity: float = 5.4
 @export var mouse_sensitivity: float = 0.0024
 @export var base_fov: float = 78.0
 @export var sprint_fov: float = 84.0
 
-const COYOTE_TIME_SEC: float = 0.12
-const JUMP_BUFFER_SEC: float = 0.10
+const COYOTE_TIME_SEC: float = 0.14
+const JUMP_BUFFER_SEC: float = 0.14
 const FALL_RESPAWN_Y: float = -15.0
+const STAND_HEIGHT: float = 1.72
+const CROUCH_HEIGHT: float = 1.08
+const STAND_HEAD_Y: float = 1.50
+const CROUCH_HEAD_Y: float = 0.92
 
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var equipped_tool: ToolData = null
 var attack_timer: float = 0.0
+var is_crouching: bool = false
 
+var _previous_tool_id: StringName = &"crowbar"
 var _coyote_timer: float = 0.0
 var _jump_buffer_timer: float = 0.0
+var _primary_click_queued: bool = false
+var _secondary_click_queued: bool = false
 var _bob_time: float = 0.0
 var _shake_intensity: float = 0.0
 var _shake_enabled: bool = true
@@ -27,6 +36,7 @@ var _swing_tween: Tween = null
 var _current_tool_model: Node3D = null
 var _hovered_block: DestructibleBlock = null
 var _hitstop_active: bool = false
+var _ceiling_check_ray: RayCast3D = null
 
 const TOOL_MODEL_PATHS: Dictionary = {
 	&"crowbar": "res://scenes/tools/models/CrowbarModel.tscn",
@@ -38,15 +48,23 @@ const TOOL_MODEL_PATHS: Dictionary = {
 	&"remote_detonator": "res://scenes/tools/models/RemoteDetonatorModel.tscn"
 }
 
+@onready var body_collision: CollisionShape3D = $CollisionShape3D
 @onready var head: Node3D = $Head
 @onready var camera: Camera3D = $Head/Camera3D
 @onready var interaction_ray: RayCast3D = $Head/Camera3D/RayCast3D
 @onready var tool_pivot: Node3D = $Head/Camera3D/ToolPivot
 
 func _ready() -> void:
-	# Permette di salire agevolmente le scale interne a 45° dentro gli edifici
-	floor_max_angle = deg_to_rad(52.0)
-	floor_snap_length = 0.35
+	# Permette di salire fluidamente le scale interne a 45° su tutti i piani del grattacielo
+	floor_max_angle = deg_to_rad(54.0)
+	floor_snap_length = 0.38
+
+	# Raycast verso l'alto per evitare di incastrarsi nel soffitto alzandosi dal crouch
+	_ceiling_check_ray = RayCast3D.new()
+	_ceiling_check_ray.position = Vector3(0.0, 0.95, 0.0)
+	_ceiling_check_ray.target_position = Vector3(0.0, 0.85, 0.0)
+	_ceiling_check_ray.collision_mask = 1 | 4
+	add_child(_ceiling_check_ray)
 
 	_tool_pivot_base_pos = tool_pivot.position
 	_apply_user_settings()
@@ -72,10 +90,19 @@ func _apply_user_settings() -> void:
 	if is_instance_valid(camera):
 		camera.fov = base_fov
 
-func _unhandled_input(event: InputEvent) -> void:
+func _input(event: InputEvent) -> void:
 	if GameManager.is_any_ui_open():
 		return
 
+	# FIX BUG CONTROLLI: Se il cursore è stato rilasciato (es. Alt-Tab), un click lo ricattura subito!
+	if event is InputEventMouseButton and event.pressed and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+		var mb_cap := event as InputEventMouseButton
+		if mb_cap.button_index == MOUSE_BUTTON_LEFT:
+			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+			get_viewport().set_input_as_handled()
+			return
+
+	# Movimento visuale mouse (con clamp per prevenire gimbal lock)
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		var mm := event as InputEventMouseMotion
 		rotate_y(-mm.relative.x * mouse_sensitivity)
@@ -83,32 +110,62 @@ func _unhandled_input(event: InputEvent) -> void:
 		head.rotation.x = clampf(head.rotation.x, deg_to_rad(-86.0), deg_to_rad(86.0))
 		_sway_offset.x = clampf(_sway_offset.x - mm.relative.x * 0.0005, -0.035, 0.035)
 		_sway_offset.y = clampf(_sway_offset.y + mm.relative.y * 0.0005, -0.03, 0.03)
+		return
 
-	elif event is InputEventKey and event.pressed and not event.echo:
+	# FIX BUG HIGH-FPS: Latching di salto e click nel frame di input per zero input persi a 120/144Hz
+	if event.is_action_pressed("jump"):
+		_jump_buffer_timer = JUMP_BUFFER_SEC
+		return
+
+	if event is InputEventMouseButton and event.pressed and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		var mb := event as InputEventMouseButton
+		match mb.button_index:
+			MOUSE_BUTTON_LEFT:
+				_primary_click_queued = true
+			MOUSE_BUTTON_RIGHT:
+				_secondary_click_queued = true
+			MOUSE_BUTTON_WHEEL_UP:
+				_cycle_unlocked_tool(-1)
+			MOUSE_BUTTON_WHEEL_DOWN:
+				_cycle_unlocked_tool(1)
+		return
+
+	if event is InputEventKey and event.pressed and not event.echo:
 		var key_event := event as InputEventKey
+		# [F] Detonazione rapida C4 da qualsiasi strumento!
+		if event.is_action_pressed("quick_detonate"):
+			if GameManager.get_active_explosives_count() > 0:
+				GameManager.detonate_all_explosives_sequentially()
+			else:
+				EventBus.show_notification.emit("Nessuna carica C4 attiva da detonare.", Color(1.0, 0.65, 0.25))
+			return
+
+		# [Q] Cambio rapido con lo strumento precedente
+		if event.is_action_pressed("quick_swap"):
+			if _previous_tool_id != EconomyManager.equipped_tool_id and EconomyManager.unlocked_tools.has(String(_previous_tool_id)):
+				EconomyManager.equip_tool(_previous_tool_id)
+			return
+
+		# Tasti [1–7] e tastierino numerico [KP_1–7]
 		var slot_idx: int = -1
 		match key_event.physical_keycode:
-			KEY_1: slot_idx = 0
-			KEY_2: slot_idx = 1
-			KEY_3: slot_idx = 2
-			KEY_4: slot_idx = 3
-			KEY_5: slot_idx = 4
-			KEY_6: slot_idx = 5
-			KEY_7: slot_idx = 6
+			KEY_1, KEY_KP_1: slot_idx = 0
+			KEY_2, KEY_KP_2: slot_idx = 1
+			KEY_3, KEY_KP_3: slot_idx = 2
+			KEY_4, KEY_KP_4: slot_idx = 3
+			KEY_5, KEY_KP_5: slot_idx = 4
+			KEY_6, KEY_KP_6: slot_idx = 5
+			KEY_7, KEY_KP_7: slot_idx = 6
 		if slot_idx >= 0 and slot_idx < EconomyManager.TOOL_ORDER.size():
 			var tid: StringName = EconomyManager.TOOL_ORDER[slot_idx]
 			if EconomyManager.unlocked_tools.has(String(tid)):
 				EconomyManager.equip_tool(tid)
 			else:
 				EventBus.ui_error.emit()
-				EventBus.show_notification.emit("Strumento bloccato! Apri l'Officina [B] per sbloccarlo.", Color(1.0, 0.65, 0.25))
-
-	elif event is InputEventMouseButton and event.pressed and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		var mb := event as InputEventMouseButton
-		if mb.button_index == MOUSE_BUTTON_WHEEL_UP:
-			_cycle_unlocked_tool(-1)
-		elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			_cycle_unlocked_tool(1)
+				EventBus.show_notification.emit(
+					"Bloccato! %s" % EconomyManager.get_tool_unlock_hint(tid),
+					Color(1.0, 0.68, 0.24)
+				)
 
 func _cycle_unlocked_tool(step: int) -> void:
 	var unlocked_ordered: Array[StringName] = []
@@ -125,7 +182,10 @@ func _cycle_unlocked_tool(step: int) -> void:
 
 func _on_tool_equipped(tool_data: Resource) -> void:
 	if tool_data is ToolData:
-		_apply_tool(tool_data as ToolData)
+		var td := tool_data as ToolData
+		if equipped_tool and equipped_tool.tool_id != td.tool_id:
+			_previous_tool_id = equipped_tool.tool_id
+		_apply_tool(td)
 
 func _on_upgrade_purchased(up_id: StringName, _lvl: int, _cost: float) -> void:
 	if up_id == &"reach_distance":
@@ -168,8 +228,11 @@ func _physics_process(delta: float) -> void:
 		velocity = Vector3.ZERO
 
 	if GameManager.is_any_ui_open():
-		velocity.x = move_toward(velocity.x, 0.0, 20.0 * delta)
-		velocity.z = move_toward(velocity.z, 0.0, 20.0 * delta)
+		_primary_click_queued = false
+		_secondary_click_queued = false
+		_jump_buffer_timer = 0.0
+		velocity.x = move_toward(velocity.x, 0.0, 22.0 * delta)
+		velocity.z = move_toward(velocity.z, 0.0, 22.0 * delta)
 		if not is_on_floor():
 			velocity.y -= gravity * delta
 		move_and_slide()
@@ -182,27 +245,36 @@ func _physics_process(delta: float) -> void:
 		_coyote_timer = maxf(_coyote_timer - delta, 0.0)
 		velocity.y -= gravity * delta
 
-	if Input.is_action_just_pressed("jump"):
-		_jump_buffer_timer = JUMP_BUFFER_SEC
-	else:
+	if _jump_buffer_timer > 0.0:
 		_jump_buffer_timer = maxf(_jump_buffer_timer - delta, 0.0)
 
-	if _jump_buffer_timer > 0.0 and _coyote_timer > 0.0:
-		velocity.y = base_jump_velocity * (1.0 + (speed_mult - 1.0) * 0.45)
+	# Gestione Crouch fluida con controllo soffitto (Ctrl o C)
+	var wants_crouch: bool = Input.is_action_pressed("crouch")
+	if wants_crouch:
+		is_crouching = true
+	elif is_crouching and not _ceiling_check_ray.is_colliding():
+		is_crouching = false
+	_update_crouch_shape(delta)
+
+	# Salto (alza automaticamente dal crouch se c'è spazio)
+	if _jump_buffer_timer > 0.0 and _coyote_timer > 0.0 and not (is_crouching and _ceiling_check_ray.is_colliding()):
+		velocity.y = base_jump_velocity * (1.0 + (speed_mult - 1.0) * 0.42)
 		_coyote_timer = 0.0
 		_jump_buffer_timer = 0.0
 
 	var input_dir: Vector2 = Input.get_vector("move_left", "move_right", "move_forward", "move_backward")
 	var direction: Vector3 = (transform.basis * Vector3(input_dir.x, 0.0, input_dir.y)).normalized()
-	var is_sprinting: bool = Input.is_action_pressed("sprint") and direction.length_squared() > 0.01
-	var target_speed: float = (base_sprint_speed if is_sprinting else base_walk_speed) * speed_mult
+	var is_sprinting: bool = Input.is_action_pressed("sprint") and not is_crouching and direction.length_squared() > 0.01
+
+	var move_base: float = base_crouch_speed if is_crouching else (base_sprint_speed if is_sprinting else base_walk_speed)
+	var target_speed: float = move_base * speed_mult
 
 	if direction.length_squared() > 0.001:
 		velocity.x = lerpf(velocity.x, direction.x * target_speed, 14.0 * delta)
 		velocity.z = lerpf(velocity.z, direction.z * target_speed, 14.0 * delta)
 	else:
-		velocity.x = move_toward(velocity.x, 0.0, 18.0 * delta)
-		velocity.z = move_toward(velocity.z, 0.0, 18.0 * delta)
+		velocity.x = move_toward(velocity.x, 0.0, 20.0 * delta)
+		velocity.z = move_toward(velocity.z, 0.0, 20.0 * delta)
 
 	move_and_slide()
 
@@ -220,9 +292,28 @@ func _physics_process(delta: float) -> void:
 			equipped_tool.behavior_type == ToolData.BehaviorType.EXPLOSIVE_PLACED
 			or equipped_tool.behavior_type == ToolData.BehaviorType.REMOTE_DETONATOR
 		)
-		var wants_action: bool = Input.is_action_just_pressed("primary_action") if is_single_trigger else Input.is_action_pressed("primary_action")
-		if wants_action and attack_timer <= 0.0:
-			_perform_primary_action()
+		var wants_primary: bool = _primary_click_queued if is_single_trigger else (_primary_click_queued or Input.is_action_pressed("primary_action"))
+		var wants_secondary: bool = _secondary_click_queued
+		_primary_click_queued = false
+		_secondary_click_queued = false
+
+		if wants_secondary and attack_timer <= 0.0:
+			_perform_secondary_action()
+		elif wants_primary and attack_timer <= 0.0:
+			_perform_primary_action(false)
+	else:
+		_primary_click_queued = false
+		_secondary_click_queued = false
+
+func _update_crouch_shape(delta: float) -> void:
+	var target_head_y: float = CROUCH_HEAD_Y if is_crouching else STAND_HEAD_Y
+	head.position.y = lerpf(head.position.y, target_head_y, minf(14.0 * delta, 1.0))
+
+	if body_collision and body_collision.shape is CapsuleShape3D:
+		var cap := body_collision.shape as CapsuleShape3D
+		var target_h: float = CROUCH_HEIGHT if is_crouching else STAND_HEIGHT
+		cap.height = lerpf(cap.height, target_h, minf(14.0 * delta, 1.0))
+		body_collision.position.y = cap.height * 0.5
 
 func _update_camera_and_weapon_feel(delta: float) -> void:
 	var horiz_speed: float = Vector2(velocity.x, velocity.z).length()
@@ -231,8 +322,9 @@ func _update_camera_and_weapon_feel(delta: float) -> void:
 	else:
 		_bob_time = 0.0
 
-	var bob_x: float = sin(_bob_time) * 0.014 if horiz_speed > 0.35 else 0.0
-	var bob_y: float = absf(cos(_bob_time)) * 0.014 if horiz_speed > 0.35 else 0.0
+	var bob_amp: float = 0.008 if is_crouching else 0.014
+	var bob_x: float = sin(_bob_time) * bob_amp if horiz_speed > 0.35 else 0.0
+	var bob_y: float = absf(cos(_bob_time)) * bob_amp if horiz_speed > 0.35 else 0.0
 
 	_sway_offset = _sway_offset.lerp(Vector2.ZERO, 10.0 * delta)
 	var target_pivot: Vector3 = _tool_pivot_base_pos + Vector3(bob_x + _sway_offset.x, -bob_y + _sway_offset.y, 0.0)
@@ -258,9 +350,19 @@ func _update_hovered_block() -> void:
 		_hovered_block = hit_block
 		EventBus.target_block_hovered.emit(_hovered_block)
 
-func _perform_primary_action() -> void:
+func _perform_secondary_action() -> void:
+	# Click Destro: con C4/Detonatore fa brillare subito tutte le cariche; con strumenti melee fa Colpo Pesante (1.65x)!
+	if equipped_tool.behavior_type == ToolData.BehaviorType.EXPLOSIVE_PLACED or equipped_tool.behavior_type == ToolData.BehaviorType.REMOTE_DETONATOR:
+		_play_button_press_animation()
+		GameManager.detonate_all_explosives_sequentially()
+		attack_timer = 0.25
+		return
+	_perform_primary_action(true)
+
+func _perform_primary_action(is_heavy: bool = false) -> void:
 	var spd_mult: float = EconomyManager.get_upgrade_total_multiplier(&"attack_speed")
-	attack_timer = maxf(equipped_tool.attack_cooldown / spd_mult, 0.055)
+	var cd_scale: float = 1.45 if is_heavy else 1.0
+	attack_timer = maxf((equipped_tool.attack_cooldown * cd_scale) / spd_mult, 0.055)
 	EventBus.tool_swung.emit(equipped_tool)
 
 	match equipped_tool.behavior_type:
@@ -274,7 +376,7 @@ func _perform_primary_action() -> void:
 		ToolData.BehaviorType.CONTINUOUS_DRILL:
 			_play_drill_animation()
 		_:
-			_play_swing_animation()
+			_play_swing_animation(is_heavy)
 
 	if not interaction_ray.is_colliding():
 		return
@@ -284,7 +386,8 @@ func _perform_primary_action() -> void:
 	var hit_normal: Vector3 = interaction_ray.get_collision_normal()
 
 	var dmg_mult: float = EconomyManager.get_upgrade_total_multiplier(&"tool_damage")
-	var total_dmg: float = equipped_tool.base_damage * dmg_mult
+	var heavy_mult: float = 1.65 if is_heavy else 1.0
+	var total_dmg: float = equipped_tool.base_damage * dmg_mult * heavy_mult
 	var broke_any: bool = false
 
 	if collider is DestructibleBlock and not collider.is_destroyed:
@@ -293,18 +396,21 @@ func _perform_primary_action() -> void:
 		block.take_damage(total_dmg, equipped_tool.hardness_penetration, hit_pos, hit_normal)
 		if was_alive and block.is_destroyed:
 			broke_any = true
-		_add_shake(0.032 if equipped_tool.aoe_radius > 0.0 else 0.016)
+		_add_shake(0.042 if (is_heavy or equipped_tool.aoe_radius > 0.0) else 0.016)
 
-		if equipped_tool.aoe_radius > 0.05:
-			var scaled_radius: float = equipped_tool.aoe_radius * EconomyManager.get_aoe_radius_multiplier()
+		var base_aoe: float = equipped_tool.aoe_radius
+		if is_heavy and base_aoe < 0.75 and equipped_tool.behavior_type != ToolData.BehaviorType.CONTINUOUS_DRILL:
+			base_aoe = 0.75
+		if base_aoe > 0.05:
+			var scaled_radius: float = base_aoe * EconomyManager.get_aoe_radius_multiplier()
 			broke_any = _apply_aoe_damage(hit_pos, block, total_dmg * 0.65, scaled_radius) or broke_any
 	elif collider is RigidBody3D:
 		var rb := collider as RigidBody3D
 		if not rb.freeze:
-			rb.apply_impulse(-camera.global_transform.basis.z * equipped_tool.impact_impulse * 0.15, hit_pos - rb.global_position)
+			rb.apply_impulse(-camera.global_transform.basis.z * equipped_tool.impact_impulse * (0.28 if is_heavy else 0.15), hit_pos - rb.global_position)
 
 	if broke_any and equipped_tool.behavior_type != ToolData.BehaviorType.CONTINUOUS_DRILL:
-		_trigger_hitstop(0.025)
+		_trigger_hitstop(0.024)
 
 func _apply_aoe_damage(center: Vector3, exclude_block: DestructibleBlock, aoe_dmg: float, radius: float) -> bool:
 	var broke_any: bool = false
@@ -336,7 +442,6 @@ func _try_place_c4() -> void:
 		EventBus.show_notification.emit("Il C4 va piazzato direttamente sulla struttura!", Color(1.0, 0.65, 0.25))
 		return
 
-	# Il C4 costa denaro ad ogni piazzamento (impedisce lo spam infinito)
 	if not EconomyManager.try_pay_c4_charge():
 		return
 
@@ -360,11 +465,11 @@ func _try_place_c4() -> void:
 	EventBus.ui_click.emit()
 	var unit_cost: int = int(EconomyManager.get_c4_unit_cost())
 	EventBus.show_notification.emit(
-		"C4 ARMATO (-€%d) • %d attivi — Premi [7] Detonatore!" % [unit_cost, GameManager.get_active_explosives_count()],
+		"C4 ARMATO (-€%d) • %d attivi — Click Destro o [F] per detonare!" % [unit_cost, GameManager.get_active_explosives_count()],
 		Color(1.0, 0.45, 0.22)
 	)
 
-func _play_swing_animation() -> void:
+func _play_swing_animation(is_heavy: bool = false) -> void:
 	if not is_instance_valid(_current_tool_model):
 		return
 	if _swing_tween and _swing_tween.is_valid():
@@ -372,10 +477,11 @@ func _play_swing_animation() -> void:
 	_current_tool_model.rotation = Vector3.ZERO
 	_current_tool_model.position = Vector3.ZERO
 
-	var dur: float = clampf(equipped_tool.swing_duration, 0.08, 0.22)
+	var dur: float = clampf(equipped_tool.swing_duration * (1.28 if is_heavy else 1.0), 0.08, 0.28)
+	var pitch: float = -76.0 if is_heavy else -58.0
 	_swing_tween = create_tween()
-	_swing_tween.tween_property(_current_tool_model, "rotation", Vector3(deg_to_rad(-58.0), deg_to_rad(14.0), deg_to_rad(22.0)), dur * 0.42).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
-	_swing_tween.parallel().tween_property(_current_tool_model, "position", Vector3(-0.08, -0.05, -0.14), dur * 0.42)
+	_swing_tween.tween_property(_current_tool_model, "rotation", Vector3(deg_to_rad(pitch), deg_to_rad(18.0), deg_to_rad(26.0)), dur * 0.42).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+	_swing_tween.parallel().tween_property(_current_tool_model, "position", Vector3(-0.10, -0.07, -0.18 if is_heavy else -0.14), dur * 0.42)
 	_swing_tween.tween_property(_current_tool_model, "rotation", Vector3.ZERO, dur * 0.85).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	_swing_tween.parallel().tween_property(_current_tool_model, "position", Vector3.ZERO, dur * 0.85)
 
@@ -384,7 +490,7 @@ func _play_drill_animation() -> void:
 		return
 	if _swing_tween and _swing_tween.is_valid():
 		_swing_tween.kill()
-	_current_tool_model.position = Vector3(randf_range(-0.015, 0.015), randf_range(-0.015, 0.015), -0.065)
+	_current_tool_model.position = Vector3(randf_range(-0.016, 0.016), randf_range(-0.016, 0.016), -0.072)
 	_swing_tween = create_tween()
 	_swing_tween.tween_property(_current_tool_model, "position", Vector3.ZERO, 0.06)
 

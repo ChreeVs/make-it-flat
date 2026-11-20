@@ -13,6 +13,12 @@ var destroyed_mass: float = 0.0
 var threshold_reached: bool = false
 var xray_active: bool = false
 
+# Tracciamento completamento per piano (premi intermedi durante la demolizione del grattacielo!)
+var floor_names: Dictionary = {}        # int -> String
+var _floor_total_count: Dictionary = {} # int -> int
+var _floor_broken_count: Dictionary = {} # int -> int
+var _floor_cleared: Dictionary = {}     # int -> bool
+
 var _counted_block_ids: Dictionary = {} # instance_id -> true
 var _bfs_scheduled: bool = false
 
@@ -36,6 +42,9 @@ func _index_structure() -> void:
 	grid_map.clear()
 	anchored_blocks.clear()
 	_counted_block_ids.clear()
+	_floor_total_count.clear()
+	_floor_broken_count.clear()
+	_floor_cleared.clear()
 	total_initial_mass = 0.0
 	destroyed_mass = 0.0
 	threshold_reached = false
@@ -50,9 +59,37 @@ func _index_structure() -> void:
 			total_initial_mass += b.mass
 			if b.is_anchored:
 				anchored_blocks.append(b)
+			if b.floor_index >= 0:
+				_floor_total_count[b.floor_index] = int(_floor_total_count.get(b.floor_index, 0)) + 1
 
 	if total_initial_mass <= 0.0:
 		total_initial_mass = 1.0
+
+func _record_block_counted(b: DestructibleBlock) -> void:
+	var bid: int = b.get_instance_id()
+	if _counted_block_ids.has(bid):
+		return
+	_counted_block_ids[bid] = true
+	destroyed_mass += b.mass
+	if b.floor_index >= 0:
+		var f: int = b.floor_index
+		var broken: int = int(_floor_broken_count.get(f, 0)) + 1
+		_floor_broken_count[f] = broken
+		if not bool(_floor_cleared.get(f, false)):
+			var total_f: int = int(_floor_total_count.get(f, 1))
+			if float(broken) / float(maxi(total_f, 1)) >= 0.84:
+				_floor_cleared[f] = true
+				var f_name: String = String(floor_names.get(f, "Piano %d" % f))
+				var bonus: float = EconomyManager.get_floor_clear_bonus(f)
+				EconomyManager.add_money(bonus)
+				var stats: Dictionary = SaveManager.save_data.get("stats", {})
+				stats["floors_cleared"] = int(stats.get("floors_cleared", 0)) + 1
+				SaveManager.save_data["stats"] = stats
+				EventBus.floor_cleared.emit(f, f_name, bonus)
+				EventBus.show_notification.emit(
+					"PIANO DEMOLITO: %s! Premio +€ %d" % [f_name.to_upper(), int(bonus)],
+					Color(0.32, 0.96, 0.56)
+				)
 
 func _on_block_destroyed(block: Node3D, _by_gravity: bool) -> void:
 	if not (block is DestructibleBlock):
@@ -69,11 +106,7 @@ func _on_block_destroyed(block: Node3D, _by_gravity: bool) -> void:
 	if db.is_anchored:
 		anchored_blocks.erase(db)
 
-	var bid: int = db.get_instance_id()
-	if not _counted_block_ids.has(bid):
-		_counted_block_ids[bid] = true
-		destroyed_mass += db.mass
-
+	_record_block_counted(db)
 	_schedule_bfs()
 	_emit_progress()
 
@@ -89,8 +122,7 @@ func _run_structural_bfs() -> void:
 		_emit_progress()
 		return
 
-	# BFS O(V+E) con cursore a indice (evita O(N^2) di Array.pop_front)
-	var visited: Dictionary = {} # Vector3i -> true
+	var visited: Dictionary = {}
 	var queue: Array[Vector3i] = []
 
 	for anchor in anchored_blocks:
@@ -124,10 +156,7 @@ func _run_structural_bfs() -> void:
 			active_intact_blocks.remove_at(i)
 			grid_map.erase(b.grid_coord)
 			disconnected.append(b)
-			var bid: int = b.get_instance_id()
-			if not _counted_block_ids.has(bid):
-				_counted_block_ids[bid] = true
-				destroyed_mass += b.mass
+			_record_block_counted(b)
 			collapsed_mass += b.mass
 		i -= 1
 
@@ -138,7 +167,7 @@ func _run_structural_bfs() -> void:
 
 		if disconnected.size() >= 6:
 			EventBus.show_notification.emit(
-				"CROLLO A CATENA! %d blocchi (%.0f kg)" % [disconnected.size(), collapsed_mass],
+				"CROLLO A CATENA! %d elementi (%.0f kg)" % [disconnected.size(), collapsed_mass],
 				Color(1.0, 0.72, 0.18)
 			)
 
@@ -148,7 +177,7 @@ func _emit_progress() -> void:
 	var ratio: float = clampf(destroyed_mass / maxf(total_initial_mass, 1.0), 0.0, 1.0)
 	EventBus.contract_progress_updated.emit(ratio, destroyed_mass, total_initial_mass)
 
-	var threshold: float = GameManager.current_contract.completion_threshold if GameManager.current_contract else 0.75
+	var threshold: float = GameManager.current_contract.completion_threshold if GameManager.current_contract else 0.88
 	if not threshold_reached and ratio >= threshold:
 		threshold_reached = true
 		_enable_xray_on_remaining()
