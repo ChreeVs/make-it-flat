@@ -28,7 +28,7 @@ func _ready() -> void:
 
 func _init_styles() -> void:
 	_row_style = StyleBoxFlat.new()
-	_row_style.bg_color = Color(0.11, 0.13, 0.165, 0.95)
+	_row_style.bg_color = Color(0.09, 0.11, 0.145, 0.95)
 	_row_style.border_width_left = 4
 	_row_style.border_width_top = 1
 	_row_style.border_width_right = 1
@@ -41,7 +41,7 @@ func _init_styles() -> void:
 	_row_style.content_margin_bottom = 10
 
 	_row_active_style = StyleBoxFlat.new()
-	_row_active_style.bg_color = Color(0.11, 0.17, 0.22, 0.98)
+	_row_active_style.bg_color = Color(0.10, 0.16, 0.21, 0.98)
 	_row_active_style.border_width_left = 4
 	_row_active_style.border_width_top = 2
 	_row_active_style.border_width_right = 2
@@ -54,7 +54,7 @@ func _init_styles() -> void:
 	_row_active_style.content_margin_bottom = 10
 
 	_row_locked_style = StyleBoxFlat.new()
-	_row_locked_style.bg_color = Color(0.08, 0.09, 0.11, 0.82)
+	_row_locked_style.bg_color = Color(0.07, 0.08, 0.10, 0.84)
 	_row_locked_style.border_width_left = 4
 	_row_locked_style.border_width_top = 1
 	_row_locked_style.border_width_right = 1
@@ -69,20 +69,21 @@ func _init_styles() -> void:
 func _load_contracts() -> void:
 	contracts_data.clear()
 	var paths := [
-		"res://data/contracts/tier1_villa.tres",
-		"res://data/contracts/tier2_warehouse.tres",
-		"res://data/contracts/tier3_condominium.tres",
-		"res://data/contracts/tier4_industrial.tres",
-		"res://data/contracts/tier5_skyscraper.tres",
-		"res://data/contracts/tier1_shack.tres",
 		"res://data/contracts/tier1_fence.tres",
-		"res://data/contracts/tier2_garage.tres"
+		"res://data/contracts/tier1_shack.tres",
+		"res://data/contracts/tier1_wall.tres",
+		"res://data/contracts/tier2_garage.tres",
+		"res://data/contracts/tier3_palazzina.tres",
+		"res://data/contracts/tier4_warehouse.tres",
+		"res://data/contracts/tier5_skyscraper.tres"
 	]
 	for p in paths:
 		if ResourceLoader.exists(p):
 			contracts_data.append(load(p))
 
 func _unhandled_input(event: InputEvent) -> void:
+	if GameManager.is_main_menu_open or GameManager.is_pause_menu_open:
+		return
 	if event.is_action_pressed("toggle_contracts"):
 		if visible:
 			close_menu()
@@ -90,11 +91,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			open_menu()
 
 func open_menu() -> void:
-	# Mutua esclusione con lo Shop
-	var shop_menu: Node = get_tree().get_root().find_child("ShopMenu", true, false)
-	if shop_menu and shop_menu.visible and shop_menu.has_method("close_shop"):
-		shop_menu.close_shop()
-
+	GameManager.close_gameplay_overlays("ContractMenu")
 	visible = true
 	GameManager.is_contract_menu_open = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -104,7 +101,7 @@ func open_menu() -> void:
 func close_menu() -> void:
 	visible = false
 	GameManager.is_contract_menu_open = false
-	if not GameManager.is_shop_open:
+	if not GameManager.is_any_ui_open():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 func refresh_contracts() -> void:
@@ -122,7 +119,7 @@ func refresh_contracts() -> void:
 		var is_unlocked: bool = c.tier <= EconomyManager.unlocked_tier
 		var is_active: bool = GameManager.current_contract != null and GameManager.current_contract.contract_id == c.contract_id
 		var is_completed: bool = completed_list.has(String(c.contract_id))
-		var scaled_bonus: float = c.completion_bonus * EconomyManager.permanent_multiplier
+		var scaled_bonus: float = EconomyManager.get_contract_bonus(c)
 
 		var panel := PanelContainer.new()
 		if is_active:
@@ -187,7 +184,7 @@ func refresh_contracts() -> void:
 		hbox.add_child(vbox)
 
 		var select_btn := Button.new()
-		select_btn.custom_minimum_size = Vector2(180, 44)
+		select_btn.custom_minimum_size = Vector2(185, 44)
 		select_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
 		if is_unlocked:

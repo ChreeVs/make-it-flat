@@ -2,21 +2,11 @@ class_name Player
 extends CharacterBody3D
 
 @export var base_walk_speed: float = 5.4
-@export var base_sprint_speed: float = 8.6
-@export var base_crouch_speed: float = 2.5
-@export var base_jump_velocity: float = 5.8
+@export var base_sprint_speed: float = 8.4
+@export var base_jump_velocity: float = 5.3
 @export var mouse_sensitivity: float = 0.0024
 @export var base_fov: float = 78.0
 @export var sprint_fov: float = 84.0
-
-const NORMAL_HEIGHT: float = 1.8
-const CROUCH_HEIGHT: float = 1.0
-const NORMAL_HEAD_Y: float = 1.62
-const CROUCH_HEAD_Y: float = 0.85
-
-var is_crouching: bool = false
-var current_crouch_ratio: float = 0.0
-var _capsule_shape: CapsuleShape3D = null
 
 const COYOTE_TIME_SEC: float = 0.12
 const JUMP_BUFFER_SEC: float = 0.10
@@ -30,6 +20,7 @@ var _coyote_timer: float = 0.0
 var _jump_buffer_timer: float = 0.0
 var _bob_time: float = 0.0
 var _shake_intensity: float = 0.0
+var _shake_enabled: bool = true
 var _sway_offset: Vector2 = Vector2.ZERO
 var _tool_pivot_base_pos: Vector3 = Vector3(0.34, -0.26, -0.44)
 var _swing_tween: Tween = null
@@ -51,20 +42,20 @@ const TOOL_MODEL_PATHS: Dictionary = {
 @onready var camera: Camera3D = $Head/Camera3D
 @onready var interaction_ray: RayCast3D = $Head/Camera3D/RayCast3D
 @onready var tool_pivot: Node3D = $Head/Camera3D/ToolPivot
-@onready var collision_shape: CollisionShape3D = $CollisionShape3D
 
 func _ready() -> void:
-	if collision_shape and collision_shape.shape is CapsuleShape3D:
-		_capsule_shape = collision_shape.shape.duplicate() as CapsuleShape3D
-		collision_shape.shape = _capsule_shape
+	# Permette di salire agevolmente le scale interne a 45° dentro gli edifici
+	floor_max_angle = deg_to_rad(52.0)
+	floor_snap_length = 0.35
 
 	_tool_pivot_base_pos = tool_pivot.position
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	_apply_user_settings()
 
 	EventBus.tool_equipped.connect(_on_tool_equipped)
 	EventBus.upgrade_purchased.connect(_on_upgrade_purchased)
 	EventBus.explosion_triggered.connect(_on_explosion_shake)
 	EventBus.chain_collapse_triggered.connect(_on_collapse_shake)
+	EventBus.settings_changed.connect(_apply_user_settings)
 
 	var initial_tool: ToolData = EconomyManager.get_tool_data(EconomyManager.equipped_tool_id)
 	if not initial_tool:
@@ -72,14 +63,17 @@ func _ready() -> void:
 	if initial_tool:
 		_apply_tool(initial_tool)
 
-func _input(event: InputEvent) -> void:
-	# Cliccando nella finestra con i menu chiusi, cattura subito il cursore per visuale libera
-	if event is InputEventMouseButton and event.pressed:
-		if not GameManager.is_shop_open and not GameManager.is_contract_menu_open:
-			if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
-				Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+func _apply_user_settings() -> void:
+	var sens_mult: float = clampf(float(SaveManager.settings.get("mouse_sensitivity", 1.0)), 0.3, 3.0)
+	mouse_sensitivity = 0.0024 * sens_mult
+	base_fov = clampf(float(SaveManager.settings.get("fov", 78.0)), 65.0, 105.0)
+	sprint_fov = minf(base_fov + 6.0, 112.0)
+	_shake_enabled = bool(SaveManager.settings.get("camera_shake", true))
+	if is_instance_valid(camera):
+		camera.fov = base_fov
 
-	if GameManager.is_shop_open or GameManager.is_contract_menu_open:
+func _unhandled_input(event: InputEvent) -> void:
+	if GameManager.is_any_ui_open():
 		return
 
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
@@ -106,7 +100,8 @@ func _input(event: InputEvent) -> void:
 			if EconomyManager.unlocked_tools.has(String(tid)):
 				EconomyManager.equip_tool(tid)
 			else:
-				EventBus.show_notification.emit("Strumento bloccato! Apri lo Shop [B] per sbloccarlo.", Color(1.0, 0.65, 0.25))
+				EventBus.ui_error.emit()
+				EventBus.show_notification.emit("Strumento bloccato! Apri l'Officina [B] per sbloccarlo.", Color(1.0, 0.65, 0.25))
 
 	elif event is InputEventMouseButton and event.pressed and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		var mb := event as InputEventMouseButton
@@ -168,12 +163,11 @@ func _rebuild_tool_model() -> void:
 			_current_tool_model.rotation = Vector3.ZERO
 
 func _physics_process(delta: float) -> void:
-	# Respawn di sicurezza se il giocatore cade fuori mappa
 	if global_position.y < FALL_RESPAWN_Y:
 		global_position = GameManager.PLAYER_SAFE_SPAWN
 		velocity = Vector3.ZERO
 
-	if GameManager.is_shop_open or GameManager.is_contract_menu_open:
+	if GameManager.is_any_ui_open():
 		velocity.x = move_toward(velocity.x, 0.0, 20.0 * delta)
 		velocity.z = move_toward(velocity.z, 0.0, 20.0 * delta)
 		if not is_on_floor():
@@ -181,20 +175,6 @@ func _physics_process(delta: float) -> void:
 		move_and_slide()
 		return
 
-	# Gestione Crouch (Ctrl o C)
-	var prev_crouching: bool = is_crouching
-	is_crouching = Input.is_action_pressed("crouch") and not GameManager.is_shop_open and not GameManager.is_contract_menu_open
-	if is_crouching != prev_crouching:
-		EventBus.player_stance_changed.emit(is_crouching)
-
-	current_crouch_ratio = lerpf(current_crouch_ratio, 1.0 if is_crouching else 0.0, 14.0 * delta)
-	head.position.y = lerpf(NORMAL_HEAD_Y, CROUCH_HEAD_Y, current_crouch_ratio)
-	if _capsule_shape:
-		var target_h: float = lerpf(NORMAL_HEIGHT, CROUCH_HEIGHT, current_crouch_ratio)
-		_capsule_shape.height = target_h
-		collision_shape.position.y = target_h * 0.5
-
-	# Movimento con upgrade player_speed, Coyote Time e Jump Buffer
 	var speed_mult: float = EconomyManager.get_upgrade_total_multiplier(&"player_speed")
 	if is_on_floor():
 		_coyote_timer = COYOTE_TIME_SEC
@@ -212,21 +192,10 @@ func _physics_process(delta: float) -> void:
 		_coyote_timer = 0.0
 		_jump_buffer_timer = 0.0
 
-	# Taglio variabile del salto per massimo controllo
-	if Input.is_action_just_released("jump") and velocity.y > 1.8:
-		velocity.y *= 0.52
-
 	var input_dir: Vector2 = Input.get_vector("move_left", "move_right", "move_forward", "move_backward")
 	var direction: Vector3 = (transform.basis * Vector3(input_dir.x, 0.0, input_dir.y)).normalized()
-	var is_sprinting: bool = Input.is_action_pressed("sprint") and direction.length_squared() > 0.01 and not is_crouching
-
-	var target_speed: float
-	if is_crouching:
-		target_speed = base_crouch_speed * speed_mult
-	elif is_sprinting:
-		target_speed = base_sprint_speed * speed_mult
-	else:
-		target_speed = base_walk_speed * speed_mult
+	var is_sprinting: bool = Input.is_action_pressed("sprint") and direction.length_squared() > 0.01
+	var target_speed: float = (base_sprint_speed if is_sprinting else base_walk_speed) * speed_mult
 
 	if direction.length_squared() > 0.001:
 		velocity.x = lerpf(velocity.x, direction.x * target_speed, 14.0 * delta)
@@ -237,17 +206,12 @@ func _physics_process(delta: float) -> void:
 
 	move_and_slide()
 
-	# FOV dinamico durante lo sprint
 	var target_fov: float = sprint_fov if is_sprinting else base_fov
 	camera.fov = lerpf(camera.fov, target_fov, 10.0 * delta)
 
-	# Weapon bob + mouse sway + camera micro-shake
 	_update_camera_and_weapon_feel(delta)
-
-	# Aggiorna blocco mirato per l'ispettore HUD
 	_update_hovered_block()
 
-	# Gestione attacco / piazzamento / detonatore
 	if attack_timer > 0.0:
 		attack_timer -= delta
 
@@ -274,11 +238,12 @@ func _update_camera_and_weapon_feel(delta: float) -> void:
 	var target_pivot: Vector3 = _tool_pivot_base_pos + Vector3(bob_x + _sway_offset.x, -bob_y + _sway_offset.y, 0.0)
 	tool_pivot.position = tool_pivot.position.lerp(target_pivot, 14.0 * delta)
 
-	if _shake_intensity > 0.001:
+	if _shake_enabled and _shake_intensity > 0.001:
 		camera.h_offset = randf_range(-_shake_intensity, _shake_intensity)
 		camera.v_offset = randf_range(-_shake_intensity, _shake_intensity)
 		_shake_intensity = lerpf(_shake_intensity, 0.0, 14.0 * delta)
 	else:
+		_shake_intensity = 0.0
 		camera.h_offset = 0.0
 		camera.v_offset = 0.0
 
@@ -330,16 +295,16 @@ func _perform_primary_action() -> void:
 			broke_any = true
 		_add_shake(0.032 if equipped_tool.aoe_radius > 0.0 else 0.016)
 
-		# Danno AoE per mazze pesanti
 		if equipped_tool.aoe_radius > 0.05:
-			broke_any = _apply_aoe_damage(hit_pos, block, total_dmg * 0.65, equipped_tool.aoe_radius) or broke_any
+			var scaled_radius: float = equipped_tool.aoe_radius * EconomyManager.get_aoe_radius_multiplier()
+			broke_any = _apply_aoe_damage(hit_pos, block, total_dmg * 0.65, scaled_radius) or broke_any
 	elif collider is RigidBody3D:
 		var rb := collider as RigidBody3D
 		if not rb.freeze:
 			rb.apply_impulse(-camera.global_transform.basis.z * equipped_tool.impact_impulse * 0.15, hit_pos - rb.global_position)
 
 	if broke_any and equipped_tool.behavior_type != ToolData.BehaviorType.CONTINUOUS_DRILL:
-		_trigger_hitstop(0.028)
+		_trigger_hitstop(0.025)
 
 func _apply_aoe_damage(center: Vector3, exclude_block: DestructibleBlock, aoe_dmg: float, radius: float) -> bool:
 	var broke_any: bool = false
@@ -361,12 +326,18 @@ func _apply_aoe_damage(center: Vector3, exclude_block: DestructibleBlock, aoe_dm
 
 func _try_place_c4() -> void:
 	if not interaction_ray.is_colliding():
+		EventBus.ui_error.emit()
 		EventBus.show_notification.emit("Avvicinati a un pilastro o muro per piazzare il C4!", Color(1.0, 0.65, 0.25))
 		return
 
 	var collider := interaction_ray.get_collider()
 	if not (collider is DestructibleBlock):
-		EventBus.show_notification.emit("Il C4 va piazzato direttamente sui blocchi della struttura!", Color(1.0, 0.65, 0.25))
+		EventBus.ui_error.emit()
+		EventBus.show_notification.emit("Il C4 va piazzato direttamente sulla struttura!", Color(1.0, 0.65, 0.25))
+		return
+
+	# Il C4 costa denaro ad ogni piazzamento (impedisce lo spam infinito)
+	if not EconomyManager.try_pay_c4_charge():
 		return
 
 	var block := collider as DestructibleBlock
@@ -381,16 +352,16 @@ func _try_place_c4() -> void:
 	block.add_child(c4)
 	c4.global_position = hit_pos + hit_normal * 0.08
 
-	# Protezione look_at contro vettori collineari (superfici orizzontali pavimento/tetto)
 	var up_ref: Vector3 = Vector3.RIGHT if absf(hit_normal.dot(Vector3.UP)) > 0.95 else Vector3.UP
 	c4.look_at(c4.global_position + hit_normal, up_ref)
 
 	GameManager.register_explosive(c4)
 	_play_button_press_animation()
 	EventBus.ui_click.emit()
+	var unit_cost: int = int(EconomyManager.get_c4_unit_cost())
 	EventBus.show_notification.emit(
-		"C4 ARMATO (%d attivi) • Premi [7] Detonatore per innescare!" % GameManager.get_active_explosives_count(),
-		Color(1.0, 0.42, 0.22)
+		"C4 ARMATO (-€%d) • %d attivi — Premi [7] Detonatore!" % [unit_cost, GameManager.get_active_explosives_count()],
+		Color(1.0, 0.45, 0.22)
 	)
 
 func _play_swing_animation() -> void:
@@ -427,16 +398,17 @@ func _play_button_press_animation() -> void:
 	_swing_tween.tween_property(_current_tool_model, "position", Vector3.ZERO, 0.12)
 
 func _add_shake(amount: float) -> void:
-	_shake_intensity = maxf(_shake_intensity, amount)
+	if _shake_enabled:
+		_shake_intensity = maxf(_shake_intensity, amount)
 
 func _on_explosion_shake(world_pos: Vector3, radius: float) -> void:
 	var dist: float = global_position.distance_to(world_pos)
 	var factor: float = clampf(1.0 - dist / maxf(radius * 5.0, 12.0), 0.15, 1.0)
 	_add_shake(0.14 * factor)
-	_trigger_hitstop(0.035)
+	_trigger_hitstop(0.030)
 
 func _on_collapse_shake(count: int, _mass: float) -> void:
-	_add_shake(clampf(0.02 + float(count) * 0.0025, 0.025, 0.11))
+	_add_shake(clampf(0.02 + float(count) * 0.0022, 0.025, 0.10))
 
 func _trigger_hitstop(duration_sec: float) -> void:
 	if _hitstop_active:

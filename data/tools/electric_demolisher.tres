@@ -6,7 +6,7 @@
 script = ExtResource("1_script")
 tool_id = &"electric_demolisher"
 display_name = "Demolitore Elettrico"
-unlock_cost = 1600.0
+unlock_cost = 3800.0
 required_tier = 2
 base_damage = 45.0
 hardness_penetration = 2

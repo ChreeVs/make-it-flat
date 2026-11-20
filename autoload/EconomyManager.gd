@@ -10,12 +10,16 @@ const TOOL_ORDER: Array[StringName] = [
 	&"remote_detonator"
 ]
 
+# Nuova curva economica bilanciata per Tier 1 -> 5
 const TIER_LICENSE_COSTS: Dictionary = {
-	2: 450.0,
-	3: 2200.0,
-	4: 6500.0,
-	5: 18000.0
+	2: 900.0,
+	3: 4500.0,
+	4: 16000.0,
+	5: 45000.0
 }
+
+# Costo unitario di ogni carica C4 piazzata (impedisce lo spam gratuito)
+const C4_BASE_UNIT_COST: float = 180.0
 
 var current_money: float = 0.0
 var unlocked_tier: int = 1
@@ -28,80 +32,147 @@ var upgrade_registry: Dictionary = {}
 var _tool_cache: Dictionary = {} # StringName -> ToolData
 
 func _ready() -> void:
-	_init_upgrades()
+	_init_skill_tree()
 	_preload_tools()
 	_sync_from_save()
 
-func _init_upgrades() -> void:
+func _init_skill_tree() -> void:
+	# NODO RADICE
 	_register_upgrade(
 		&"tool_damage",
-		"Forza Bruta",
-		"Aumenta il danno di ogni colpo e detonazione del +25% per livello.",
-		"POTENZA",
-		35.0,
-		1.55,
+		"Forza Strutturale",
+		"Potenzia il danno base di tutti gli strumenti e delle esplosioni del +25% per livello.",
+		"RADICE",
+		45.0,
+		1.62,
 		20,
-		0.25
+		0.25,
+		&"",
+		0,
+		Vector2(0.50, 0.13)
 	)
+
+	# RAMO 1: POTENZA & ESPLOSIVI (Sinistra)
 	_register_upgrade(
 		&"attack_speed",
 		"Ritmo di Demolizione",
-		"Riduce il tempo tra un colpo e l'altro del +15% per livello.",
-		"VELOCITA",
-		50.0,
-		1.60,
-		15,
-		0.15
+		"Riduce il tempo tra un colpo e il successivo del +15% per livello.",
+		"POTENZA",
+		75.0,
+		1.65,
+		12,
+		0.15,
+		&"tool_damage",
+		1,
+		Vector2(0.18, 0.39)
 	)
+	_register_upgrade(
+		&"aoe_boost",
+		"Onda Sismica",
+		"Espande il raggio d'urto delle mazze pesanti e delle cariche C4 del +18% per livello.",
+		"POTENZA",
+		280.0,
+		1.78,
+		8,
+		0.18,
+		&"attack_speed",
+		2,
+		Vector2(0.18, 0.65)
+	)
+	_register_upgrade(
+		&"c4_discount",
+		"Esplosivista Esperto",
+		"Riduce il costo di ogni carica C4 del -10% (fino a -50%) e +20% danno esplosivo.",
+		"POTENZA",
+		950.0,
+		1.95,
+		5,
+		0.10,
+		&"aoe_boost",
+		1,
+		Vector2(0.18, 0.89)
+	)
+
+	# RAMO 2: ECONOMIA & FISICA (Centro)
 	_register_upgrade(
 		&"debris_value",
 		"Riciclo Macerie",
-		"Aumenta il valore in Euro di ogni blocco demolito del +20% per livello.",
+		"Aumenta il valore commerciale di ogni blocco demolito del +20% per livello.",
 		"ECONOMIA",
-		65.0,
-		1.65,
-		20,
-		0.20
-	)
-	_register_upgrade(
-		&"reach_distance",
-		"Braccio Esteso",
-		"Estende la portata di colpimento e piazzamento C4 del +10% per livello.",
-		"MOBILITA",
-		80.0,
-		1.60,
-		8,
-		0.10
-	)
-	_register_upgrade(
-		&"player_speed",
-		"Stivali Antinfortunistici",
-		"Aumenta velocita di corsa e spinta di salto del +10% per livello.",
-		"MOBILITA",
-		70.0,
-		1.55,
-		10,
-		0.10
+		85.0,
+		1.68,
+		18,
+		0.20,
+		&"tool_damage",
+		1,
+		Vector2(0.50, 0.39)
 	)
 	_register_upgrade(
 		&"chain_bonus",
 		"Effetto Domino",
-		"Bonus extra del +25% sui blocchi abbattuti per crollo gravitazionale.",
-		"FISICA",
-		120.0,
-		1.70,
+		"Bonus extra del +30% sui blocchi abbattuti per crollo gravitazionale a catena.",
+		"ECONOMIA",
+		220.0,
+		1.75,
 		12,
-		0.25
+		0.30,
+		&"debris_value",
+		2,
+		Vector2(0.50, 0.65)
+	)
+	_register_upgrade(
+		&"contract_bonus_mult",
+		"Appalti d'Oro",
+		"Incrementa il premio finale di completamento commessa del +18% per livello.",
+		"ECONOMIA",
+		650.0,
+		1.88,
+		10,
+		0.18,
+		&"chain_bonus",
+		1,
+		Vector2(0.50, 0.89)
+	)
+
+	# RAMO 3: MOBILITÀ & AUTOMAZIONE (Destra)
+	_register_upgrade(
+		&"reach_distance",
+		"Braccio Esteso",
+		"Aumenta la portata di colpimento e piazzamento C4 del +12% per livello.",
+		"MOBILITA",
+		90.0,
+		1.65,
+		8,
+		0.12,
+		&"tool_damage",
+		1,
+		Vector2(0.82, 0.39)
+	)
+	_register_upgrade(
+		&"player_speed",
+		"Stivali Antinfortunistici",
+		"Velocita di corsa, salita scale e spinta di salto aumentate del +10% per livello.",
+		"MOBILITA",
+		110.0,
+		1.62,
+		10,
+		0.10,
+		&"reach_distance",
+		1,
+		Vector2(0.82, 0.65)
 	)
 	_register_upgrade(
 		&"automation_drone",
-		"Drone Demolitore Autonomo",
-		"Sblocca e potenzia un drone laser che smantella i cantieri dall'alto.",
+		"Drone Demolitore",
+		"Dispiega e potenzia un drone laser autonomo che demolisce le strutture dall'alto.",
 		"AUTOMAZIONE",
-		400.0,
-		2.05,
+		550.0,
+		2.10,
 		8,
-		0.50
+		0.50,
+		&"player_speed",
+		2,
+		Vector2(0.82, 0.89)
 	)
 
 func _register_upgrade(
@@ -112,7 +183,10 @@ func _register_upgrade(
 	base_cost: float,
 	multiplier: float,
 	max_level: int,
-	effect: float
+	effect: float,
+	parent_id: StringName,
+	min_parent_lvl: int,
+	tree_pos: Vector2
 ) -> void:
 	upgrade_registry[id] = {
 		"id": id,
@@ -122,7 +196,10 @@ func _register_upgrade(
 		"base_cost": base_cost,
 		"multiplier": multiplier,
 		"max_level": max_level,
-		"effect": effect
+		"effect": effect,
+		"parent_id": parent_id,
+		"min_parent_lvl": min_parent_lvl,
+		"tree_pos": tree_pos
 	}
 
 func _preload_tools() -> void:
@@ -176,9 +253,49 @@ func spend_money(amount: float) -> bool:
 	EventBus.currency_changed.emit(current_money, -amount)
 	return true
 
+func get_c4_unit_cost() -> float:
+	var disc_lvl: int = get_upgrade_level(&"c4_discount")
+	var discount: float = clampf(float(disc_lvl) * 0.10, 0.0, 0.50)
+	return round(C4_BASE_UNIT_COST * (1.0 - discount))
+
+func try_pay_c4_charge() -> bool:
+	var cost: float = get_c4_unit_cost()
+	if current_money < cost:
+		EventBus.ui_error.emit()
+		EventBus.show_notification.emit(
+			"Fondi insufficienti! Ogni carica C4 costa € %d" % int(cost),
+			Color(1.0, 0.35, 0.28)
+		)
+		return false
+	return spend_money(cost)
+
+func get_c4_damage_multiplier() -> float:
+	var base_mult: float = get_upgrade_total_multiplier(&"tool_damage")
+	var exp_bonus: float = 1.0 + float(get_upgrade_level(&"c4_discount")) * 0.20
+	return base_mult * exp_bonus
+
+func get_aoe_radius_multiplier() -> float:
+	return get_upgrade_total_multiplier(&"aoe_boost")
+
+func get_contract_bonus(contract: ContractData) -> float:
+	if not contract:
+		return 0.0
+	var bonus_mult: float = get_upgrade_total_multiplier(&"contract_bonus_mult")
+	return round(contract.completion_bonus * bonus_mult * permanent_multiplier)
+
 func get_upgrade_level(upgrade_id: StringName) -> int:
 	var upgrades: Dictionary = SaveManager.save_data.get("upgrades", {})
 	return int(upgrades.get(String(upgrade_id), 0))
+
+func is_skill_prereq_met(upgrade_id: StringName) -> bool:
+	if not upgrade_registry.has(upgrade_id):
+		return false
+	var def: Dictionary = upgrade_registry[upgrade_id]
+	var parent_id: StringName = def.get("parent_id", &"")
+	var min_lvl: int = int(def.get("min_parent_lvl", 0))
+	if parent_id == &"" or min_lvl <= 0:
+		return true
+	return get_upgrade_level(parent_id) >= min_lvl
 
 func get_upgrade_cost(upgrade_id: StringName) -> float:
 	if not upgrade_registry.has(upgrade_id):
@@ -194,8 +311,11 @@ func get_upgrade_total_multiplier(upgrade_id: StringName) -> float:
 	var lvl: int = get_upgrade_level(upgrade_id)
 	return 1.0 + float(lvl) * float(def["effect"])
 
-func purchase_upgrade(upgrade_id: StringName) -> bool:
+func purchase_upgrade(upgrade_id: StringName, enforce_prereq: bool = false) -> bool:
 	if not upgrade_registry.has(upgrade_id):
+		return false
+	if enforce_prereq and not is_skill_prereq_met(upgrade_id):
+		EventBus.ui_error.emit()
 		return false
 	var def: Dictionary = upgrade_registry[upgrade_id]
 	var lvl: int = get_upgrade_level(upgrade_id)
@@ -203,11 +323,13 @@ func purchase_upgrade(upgrade_id: StringName) -> bool:
 		return false
 	var cost: float = get_upgrade_cost(upgrade_id)
 	if not spend_money(cost):
+		EventBus.ui_error.emit()
 		return false
 
 	var new_lvl: int = lvl + 1
 	SaveManager.save_data["upgrades"][String(upgrade_id)] = new_lvl
 	SaveManager.save_game()
+	EventBus.ui_click.emit()
 	EventBus.upgrade_purchased.emit(upgrade_id, new_lvl, cost)
 	return true
 
@@ -238,8 +360,10 @@ func purchase_tier_license(tier: int) -> bool:
 		return false
 	var cost: float = get_tier_license_cost(tier)
 	if not spend_money(cost):
+		EventBus.ui_error.emit()
 		return false
 	unlock_tier(tier)
+	EventBus.ui_click.emit()
 	EventBus.show_notification.emit("LICENZA TIER %d ACQUISTATA! Nuovi cantieri disponibili." % tier, Color(0.35, 0.92, 0.45))
 	return true
 
@@ -258,6 +382,15 @@ func calculate_block_payout(mat_data: MaterialData, by_gravity: bool = false) ->
 	var debris_mult: float = get_upgrade_total_multiplier(&"debris_value")
 	var chain_mult: float = get_upgrade_total_multiplier(&"chain_bonus") if by_gravity else 1.0
 	return base_val * debris_mult * chain_mult * permanent_multiplier
+
+func reset_for_new_career() -> void:
+	SaveManager.reset_career_save()
+	_sync_from_save()
+	EventBus.currency_changed.emit(current_money, 0.0)
+	EventBus.tier_unlocked.emit(unlocked_tier)
+	var start_tool: ToolData = get_tool_data(&"crowbar")
+	if start_tool:
+		EventBus.tool_equipped.emit(start_tool)
 
 func perform_prestige() -> void:
 	prestige_count += 1

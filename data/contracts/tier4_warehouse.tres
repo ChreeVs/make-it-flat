@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ContractData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ContractData.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://scenes/structures/tier_4/Warehouse_Structure.tscn" id="2_scene"]
+
+[resource]
+script = ExtResource("1_script")
+contract_id = &"tier4_warehouse"
+tier = 4
+title = "Capannone Industriale in Acciaio"
+description = "Capannone industriale con 6 piloni in acciaio Tier 4, passerella sopraelevata accessibile via scala metallica e capriate."
+structure_scene = ExtResource("2_scene")
+completion_threshold = 0.88
+completion_bonus = 18500.0
+required_capital = 0.0

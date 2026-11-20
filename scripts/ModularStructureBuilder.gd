@@ -21,7 +21,14 @@ func generate_wall() -> void:
 				continue
 
 			var block: DestructibleBlock = block_scene.instantiate()
-			block.material_data = mat_plank if (x == 2 or x == 7 or y == wall_height - 1) else mat_rotten
+			var is_pillar: bool = (x == 2 or x == 7)
+			block.material_data = mat_plank if (is_pillar or y == wall_height - 1) else mat_rotten
+			if is_pillar:
+				block.block_shape = DestructibleBlock.BlockShape.PILLAR
+			elif y == wall_height - 1:
+				block.block_shape = DestructibleBlock.BlockShape.BEAM_X
+			else:
+				block.block_shape = DestructibleBlock.BlockShape.WALL_X
 
 			var x_pos: float = float(x - int(wall_width * 0.5)) * block_size
 			var y_pos: float = (float(y) + 0.5) * block_size

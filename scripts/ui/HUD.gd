@@ -1,19 +1,18 @@
 class_name HUD
 extends Control
 
-@onready var money_label: Label = $TopLeft/MoneyPanel/VBox/MoneyLabel
+@onready var money_label: Label = $TopLeft/MoneyPanel/VBox/MoneyRow/MoneyLabel
+@onready var money_delta_label: Label = $TopLeft/MoneyPanel/VBox/MoneyRow/MoneyDeltaLabel
 @onready var tier_label: Label = $TopLeft/MoneyPanel/VBox/MetaRow/TierLabel
 @onready var prestige_badge: Label = $TopLeft/MoneyPanel/VBox/MetaRow/PrestigeBadge
-@onready var stance_badge: Label = $TopLeft/MoneyPanel/VBox/MetaRow/StanceBadge
 @onready var c4_badge: Label = $TopLeft/MoneyPanel/VBox/C4Badge
 
 @onready var contract_title_label: Label = $TopCenter/ProgressPanel/ProgressContainer/ContractTitle
-@onready var progress_bar: ProgressBar = $TopCenter/ProgressPanel/ProgressContainer/ProgressBar
+@onready var progress_bar: ProgressBar = $TopCenter/ProgressPanel/ProgressContainer/BarHolder/ProgressBar
 @onready var progress_label: Label = $TopCenter/ProgressPanel/ProgressContainer/ProgressLabel
 
 @onready var completion_banner: PanelContainer = $CenterNotification/CompletionBanner
 @onready var completion_label: Label = $CenterNotification/CompletionBanner/VBox/CompletionText
-@onready var countdown_label: Label = $CenterNotification/CompletionBanner/VBox/CountdownText
 @onready var notification_label: Label = $TopNotification/NotificationLabel
 
 @onready var target_inspector: PanelContainer = $TargetInspector
@@ -25,7 +24,6 @@ extends Control
 @onready var hotbar_container: HBoxContainer = $BottomCenter/Hotbar
 @onready var tool_name_label: Label = $BottomRight/ToolPanel/ToolContainer/ToolName
 @onready var tool_stats_label: Label = $BottomRight/ToolPanel/ToolContainer/ToolStats
-@onready var floating_text_layer: Control = $FloatingTextLayer
 @onready var crosshair: Control = $Crosshair
 
 const HOTBAR_SHORT_NAMES: Dictionary = {
@@ -41,15 +39,23 @@ const HOTBAR_SHORT_NAMES: Dictionary = {
 var current_completion_available: bool = false
 var notification_tween: Tween
 var _hovered_block: DestructibleBlock = null
-var _hotbar_panels: Dictionary = {} # StringName -> PanelContainer
+var _hotbar_panels: Dictionary = {}
 var _style_slot_locked: StyleBoxFlat
 var _style_slot_unlocked: StyleBoxFlat
 var _style_slot_active: StyleBoxFlat
+
+# Animazione fluida del contatore denaro (senza scritte fluttuanti 3D -> zero lag!)
+var _displayed_money: float = 0.0
+var _target_money: float = 0.0
+var _accumulated_delta: float = 0.0
+var _delta_fade_timer: float = 0.0
+var _money_punch_tween: Tween = null
 
 func _ready() -> void:
 	completion_banner.visible = false
 	notification_label.visible = false
 	target_inspector.visible = false
+	money_delta_label.visible = false
 
 	_create_hotbar_styles()
 	_build_hotbar()
@@ -60,7 +66,6 @@ func _ready() -> void:
 	EventBus.contract_completed.connect(_on_contract_completed)
 	EventBus.contract_selected.connect(_on_contract_selected)
 	EventBus.show_notification.connect(show_notification)
-	EventBus.show_floating_text.connect(_spawn_floating_text)
 	EventBus.tool_equipped.connect(_on_tool_equipped)
 	EventBus.tool_unlocked.connect(_on_tool_unlocked)
 	EventBus.upgrade_purchased.connect(_on_upgrade_purchased)
@@ -69,44 +74,53 @@ func _ready() -> void:
 	EventBus.target_block_hovered.connect(_on_target_block_hovered)
 	EventBus.block_damaged.connect(_on_block_damaged_feedback)
 	EventBus.explosives_count_changed.connect(_on_explosives_count_changed)
-	EventBus.level_completed_countdown.connect(_on_level_completed_countdown)
-	EventBus.player_stance_changed.connect(_on_player_stance_changed)
+	EventBus.game_state_changed.connect(_on_game_state_changed)
 
-	_update_money_display(EconomyManager.current_money)
+	_displayed_money = EconomyManager.current_money
+	_target_money = EconomyManager.current_money
+	money_label.text = _format_euros(_displayed_money)
+
 	_update_meta_badges()
 	_update_contract_header()
 	_update_tool_display()
 	_refresh_hotbar()
+	_sync_hud_visibility()
+
+func _on_game_state_changed(_state: String) -> void:
+	_sync_hud_visibility()
+
+func _sync_hud_visibility() -> void:
+	visible = not GameManager.is_main_menu_open
 
 func _create_hotbar_styles() -> void:
 	_style_slot_locked = StyleBoxFlat.new()
-	_style_slot_locked.bg_color = Color(0.06, 0.07, 0.09, 0.55)
+	_style_slot_locked.bg_color = Color(0.05, 0.06, 0.08, 0.52)
 	_style_slot_locked.border_width_left = 1
 	_style_slot_locked.border_width_top = 1
 	_style_slot_locked.border_width_right = 1
 	_style_slot_locked.border_width_bottom = 1
-	_style_slot_locked.border_color = Color(0.22, 0.25, 0.30, 0.5)
+	_style_slot_locked.border_color = Color(0.20, 0.24, 0.30, 0.45)
 	_style_slot_locked.set_corner_radius_all(5)
 	_style_slot_locked.content_margin_left = 8
 	_style_slot_locked.content_margin_right = 8
-	_style_slot_locked.content_margin_top = 4
-	_style_slot_locked.content_margin_bottom = 4
+	_style_slot_locked.content_margin_top = 5
+	_style_slot_locked.content_margin_bottom = 5
 
 	_style_slot_unlocked = StyleBoxFlat.new()
-	_style_slot_unlocked.bg_color = Color(0.09, 0.11, 0.14, 0.84)
+	_style_slot_unlocked.bg_color = Color(0.07, 0.09, 0.12, 0.86)
 	_style_slot_unlocked.border_width_left = 1
 	_style_slot_unlocked.border_width_top = 1
 	_style_slot_unlocked.border_width_right = 1
 	_style_slot_unlocked.border_width_bottom = 1
-	_style_slot_unlocked.border_color = Color(0.38, 0.43, 0.50, 0.85)
+	_style_slot_unlocked.border_color = Color(0.36, 0.42, 0.50, 0.85)
 	_style_slot_unlocked.set_corner_radius_all(5)
 	_style_slot_unlocked.content_margin_left = 8
 	_style_slot_unlocked.content_margin_right = 8
-	_style_slot_unlocked.content_margin_top = 4
-	_style_slot_unlocked.content_margin_bottom = 4
+	_style_slot_unlocked.content_margin_top = 5
+	_style_slot_unlocked.content_margin_bottom = 5
 
 	_style_slot_active = StyleBoxFlat.new()
-	_style_slot_active.bg_color = Color(0.18, 0.15, 0.07, 0.94)
+	_style_slot_active.bg_color = Color(0.18, 0.14, 0.06, 0.96)
 	_style_slot_active.border_width_left = 2
 	_style_slot_active.border_width_top = 2
 	_style_slot_active.border_width_right = 2
@@ -115,8 +129,8 @@ func _create_hotbar_styles() -> void:
 	_style_slot_active.set_corner_radius_all(5)
 	_style_slot_active.content_margin_left = 8
 	_style_slot_active.content_margin_right = 8
-	_style_slot_active.content_margin_top = 4
-	_style_slot_active.content_margin_bottom = 4
+	_style_slot_active.content_margin_top = 5
+	_style_slot_active.content_margin_bottom = 5
 
 func _build_hotbar() -> void:
 	for child in hotbar_container.get_children():
@@ -126,7 +140,7 @@ func _build_hotbar() -> void:
 	for i in range(EconomyManager.TOOL_ORDER.size()):
 		var tid: StringName = EconomyManager.TOOL_ORDER[i]
 		var slot := PanelContainer.new()
-		slot.custom_minimum_size = Vector2(78, 44)
+		slot.custom_minimum_size = Vector2(82, 48)
 		slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 		var vbox := VBoxContainer.new()
@@ -155,10 +169,18 @@ func _build_hotbar() -> void:
 		_hotbar_panels[tid] = slot
 
 func _refresh_hotbar() -> void:
+	var c4_cost: int = int(EconomyManager.get_c4_unit_cost())
 	for tid in _hotbar_panels.keys():
 		var slot: PanelContainer = _hotbar_panels[tid]
 		var is_unlocked: bool = EconomyManager.unlocked_tools.has(String(tid))
 		var is_equipped: bool = EconomyManager.equipped_tool_id == tid
+		var name_lbl := slot.find_child("SlotName", true, false) as Label
+		if name_lbl:
+			if tid == &"c4_charge":
+				name_lbl.text = "C4 (€%d)" % c4_cost
+			else:
+				name_lbl.text = HOTBAR_SHORT_NAMES.get(tid, String(tid))
+
 		if is_equipped:
 			slot.add_theme_stylebox_override("panel", _style_slot_active)
 			slot.modulate = Color(1.0, 1.0, 1.0, 1.0)
@@ -169,16 +191,26 @@ func _refresh_hotbar() -> void:
 			slot.add_theme_stylebox_override("panel", _style_slot_locked)
 			slot.modulate = Color(0.55, 0.58, 0.62, 0.55)
 
-func _process(_delta: float) -> void:
-	if GameManager.is_shop_open or GameManager.is_contract_menu_open:
-		return
+func _process(delta: float) -> void:
+	# Rolling count-up fluido del denaro + fade del badge accumulatore
+	if not is_equal_approx(_displayed_money, _target_money):
+		var diff: float = _target_money - _displayed_money
+		if absf(diff) < 1.0:
+			_displayed_money = _target_money
+		else:
+			_displayed_money = lerpf(_displayed_money, _target_money, minf(12.0 * delta, 1.0))
+		money_label.text = _format_euros(_displayed_money)
 
-	# Se il cantiere è stato completato e c'è il countdown, premi Spazio o E per avanzare subito
-	if GameManager.auto_advance_timer > 0.0:
-		if Input.is_action_just_pressed("jump") or Input.is_action_just_pressed("interact"):
-			GameManager.advance_to_next_contract()
-			completion_banner.visible = false
-			return
+	if _delta_fade_timer > 0.0:
+		_delta_fade_timer -= delta
+		if _delta_fade_timer <= 0.0:
+			_accumulated_delta = 0.0
+			money_delta_label.visible = false
+		elif _delta_fade_timer < 0.35:
+			money_delta_label.modulate.a = clampf(_delta_fade_timer / 0.35, 0.0, 1.0)
+
+	if GameManager.is_any_ui_open():
+		return
 
 	if current_completion_available and Input.is_action_just_pressed("interact"):
 		GameManager.complete_current_contract()
@@ -188,7 +220,6 @@ func _process(_delta: float) -> void:
 	if Input.is_action_just_pressed("reset_site"):
 		GameManager.restart_current_contract()
 
-	# Aggiorna HP del blocco attualmente mirato
 	if is_instance_valid(_hovered_block) and not _hovered_block.is_destroyed:
 		_refresh_target_inspector(_hovered_block)
 	elif target_inspector.visible:
@@ -197,7 +228,7 @@ func _process(_delta: float) -> void:
 		_set_crosshair_color(Color(1.0, 1.0, 1.0, 0.88))
 
 func _format_euros(amount: float) -> String:
-	var n: int = int(floor(amount))
+	var n: int = int(floor(maxf(amount, 0.0)))
 	var s: String = str(n)
 	var out: String = ""
 	var count: int = 0
@@ -208,11 +239,36 @@ func _format_euros(amount: float) -> String:
 		count += 1
 	return "€ " + out
 
-func _on_currency_changed(new_amount: float, _delta: float) -> void:
-	_update_money_display(new_amount)
+func _on_currency_changed(new_amount: float, delta_val: float) -> void:
+	_target_money = new_amount
+	if absf(delta_val) < 0.01:
+		_displayed_money = new_amount
+		money_label.text = _format_euros(_displayed_money)
+		return
 
-func _update_money_display(amount: float) -> void:
-	money_label.text = _format_euros(amount)
+	# Accumula nella finestra attiva invece di creare centinaia di scritte (0 lag!)
+	if _delta_fade_timer <= 0.0 or (delta_val > 0.0 and _accumulated_delta < 0.0) or (delta_val < 0.0 and _accumulated_delta > 0.0):
+		_accumulated_delta = delta_val
+	else:
+		_accumulated_delta += delta_val
+
+	_delta_fade_timer = 1.25
+	money_delta_label.visible = true
+	money_delta_label.modulate.a = 1.0
+	if _accumulated_delta >= 0.0:
+		money_delta_label.text = "+%s" % _format_euros(_accumulated_delta)
+		money_delta_label.add_theme_color_override("font_color", Color(0.98, 0.84, 0.25))
+	else:
+		money_delta_label.text = "-%s" % _format_euros(absf(_accumulated_delta))
+		money_delta_label.add_theme_color_override("font_color", Color(1.0, 0.36, 0.28))
+
+	# Piccolo punch animato sul contatore
+	if _money_punch_tween and _money_punch_tween.is_valid():
+		_money_punch_tween.kill()
+	money_label.pivot_offset = Vector2(0.0, money_label.size.y * 0.5)
+	money_label.scale = Vector2(1.12, 1.12)
+	_money_punch_tween = create_tween()
+	_money_punch_tween.tween_property(money_label, "scale", Vector2.ONE, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 func _update_meta_badges() -> void:
 	tier_label.text = "LICENZA TIER %d" % EconomyManager.unlocked_tier
@@ -221,16 +277,6 @@ func _update_meta_badges() -> void:
 		prestige_badge.text = "• PRESTIGIO x%.1f" % EconomyManager.permanent_multiplier
 	else:
 		prestige_badge.visible = false
-
-func _on_player_stance_changed(is_crouching: bool) -> void:
-	if not stance_badge:
-		return
-	if is_crouching:
-		stance_badge.text = "• ACCOVACCIATO"
-		stance_badge.add_theme_color_override("font_color", Color(1.0, 0.78, 0.28))
-	else:
-		stance_badge.text = "• IN PIEDI"
-		stance_badge.add_theme_color_override("font_color", Color(0.55, 0.82, 1.0))
 
 func _update_contract_header() -> void:
 	if GameManager.current_contract:
@@ -246,24 +292,21 @@ func _on_contract_selected(_contract: ContractData) -> void:
 func _on_progress_updated(ratio: float, destroyed_mass: float, total_mass: float) -> void:
 	var percent: float = ratio * 100.0
 	progress_bar.value = percent
-	var thresh_pct: int = int(round((GameManager.current_contract.completion_threshold if GameManager.current_contract else 0.75) * 100.0))
+	var thresh_pct: int = int(round((GameManager.current_contract.completion_threshold if GameManager.current_contract else 0.88) * 100.0))
 	progress_label.text = "Demolizione: %.1f%%  (%.0f / %.0f kg)  •  Soglia %d%%" % [percent, destroyed_mass, total_mass, thresh_pct]
 	_update_contract_header()
 
 func _on_contract_threshold_reached(contract: ContractData) -> void:
-	current_completion_available = false
+	if GameManager.contract_bonus_claimed:
+		return
+	current_completion_available = true
 	completion_banner.visible = true
-	var base_bonus: float = contract.completion_bonus if contract else 500.0
-	var final_bonus: float = base_bonus * EconomyManager.permanent_multiplier
-	completion_label.text = "🎉 SOGLIA RAGGIUNTA! Premio: +%s" % _format_euros(final_bonus)
-
-func _on_level_completed_countdown(seconds_left: float, next_contract_name: String) -> void:
-	completion_banner.visible = true
-	var bonus: float = (GameManager.current_contract.completion_bonus if GameManager.current_contract else 500.0) * EconomyManager.permanent_multiplier
-	completion_label.text = "🎉 CANTIERE DEMOLITO! +%s" % _format_euros(bonus)
-	countdown_label.text = "Prossimo: %s tra %.1fs... [Premi SPAZIO per avanzare subito]" % [next_contract_name, seconds_left]
+	var final_bonus: float = EconomyManager.get_contract_bonus(contract) if contract else 150.0
+	completion_label.text = "SOGLIA RAGGIUNTA! Premi [E] per Incassare %s (o demolisci il resto)" % _format_euros(final_bonus)
 
 func _on_contract_completed(_contract: ContractData) -> void:
+	completion_banner.visible = false
+	current_completion_available = false
 	_update_meta_badges()
 
 func _on_tool_equipped(_tool: ToolData) -> void:
@@ -275,6 +318,7 @@ func _on_tool_unlocked(_tool_id: StringName) -> void:
 
 func _on_upgrade_purchased(_id: StringName, _new_lvl: int, _cost: float) -> void:
 	_update_tool_display()
+	_refresh_hotbar()
 
 func _on_tier_or_prestige_changed(_val: int) -> void:
 	_update_meta_badges()
@@ -287,6 +331,7 @@ func _on_prestige_performed(_count: int, _mult: float) -> void:
 func _on_explosives_count_changed(count: int) -> void:
 	c4_badge.visible = count > 0
 	c4_badge.text = "C4 ARMATI: %d  ([7] Detonatore)" % count
+	_update_tool_display()
 
 func _on_target_block_hovered(block: Node3D) -> void:
 	if block is DestructibleBlock and is_instance_valid(block) and not block.is_destroyed:
@@ -300,7 +345,7 @@ func _on_target_block_hovered(block: Node3D) -> void:
 func _refresh_target_inspector(block: DestructibleBlock) -> void:
 	target_inspector.visible = true
 	var mat: MaterialData = block.material_data
-	var m_name: String = mat.display_name if mat else "Blocco"
+	var m_name: String = mat.display_name if mat else "Struttura"
 	var m_tier: int = mat.hardness_tier if mat else 1
 
 	target_mat_name.text = m_name
@@ -324,10 +369,10 @@ func _set_crosshair_color(col: Color) -> void:
 			child.color = col
 
 func _on_block_damaged_feedback(_block: Node3D, _amount: float, _pos: Vector3, _nrm: Vector3) -> void:
-	crosshair.scale = Vector2(1.28, 1.28)
+	crosshair.scale = Vector2(1.25, 1.25)
 	crosshair.pivot_offset = crosshair.size * 0.5
 	var t: Tween = create_tween()
-	t.tween_property(crosshair, "scale", Vector2.ONE, 0.10).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	t.tween_property(crosshair, "scale", Vector2.ONE, 0.09).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 func _update_tool_display() -> void:
 	var tool_data: ToolData = EconomyManager.get_tool_data(EconomyManager.equipped_tool_id)
@@ -339,6 +384,7 @@ func _update_tool_display() -> void:
 	var dmg_mult: float = EconomyManager.get_upgrade_total_multiplier(&"tool_damage")
 	var spd_mult: float = EconomyManager.get_upgrade_total_multiplier(&"attack_speed")
 	var reach_mult: float = EconomyManager.get_upgrade_total_multiplier(&"reach_distance")
+	var aoe_mult: float = EconomyManager.get_aoe_radius_multiplier()
 
 	var actual_dmg: float = tool_data.base_damage * dmg_mult
 	var actual_cooldown: float = maxf(tool_data.attack_cooldown / spd_mult, 0.055)
@@ -347,9 +393,12 @@ func _update_tool_display() -> void:
 	if tool_data.behavior_type == ToolData.BehaviorType.REMOTE_DETONATOR:
 		tool_stats_label.text = "Innesco a Catena  |  Cariche Attive: %d" % GameManager.get_active_explosives_count()
 	elif tool_data.behavior_type == ToolData.BehaviorType.EXPLOSIVE_PLACED:
-		tool_stats_label.text = "Esplosivo T4  |  Raggio: %.1fm  |  Danno: %.0f" % [tool_data.aoe_radius, actual_dmg]
+		var c4_cost: int = int(EconomyManager.get_c4_unit_cost())
+		var c4_rad: float = tool_data.aoe_radius * aoe_mult
+		var c4_dmg: float = tool_data.base_damage * EconomyManager.get_c4_damage_multiplier()
+		tool_stats_label.text = "Costo: €%d/carica  |  Raggio: %.1fm  |  DMG: %.0f" % [c4_cost, c4_rad, c4_dmg]
 	else:
-		var aoe_str: String = "  |  AoE %.1fm" % tool_data.aoe_radius if tool_data.aoe_radius > 0.0 else ""
+		var aoe_str: String = "  |  AoE %.1fm" % (tool_data.aoe_radius * aoe_mult) if tool_data.aoe_radius > 0.0 else ""
 		tool_stats_label.text = "DMG: %.0f  |  T%d  |  %.2fs  |  %.1fm%s" % [
 			actual_dmg,
 			tool_data.hardness_penetration,
@@ -359,6 +408,8 @@ func _update_tool_display() -> void:
 		]
 
 func show_notification(message: String, color: Color = Color.WHITE) -> void:
+	if GameManager.is_main_menu_open:
+		return
 	notification_label.text = message
 	notification_label.modulate = color
 	notification_label.visible = true
@@ -369,32 +420,8 @@ func show_notification(message: String, color: Color = Color.WHITE) -> void:
 	notification_tween = create_tween()
 	notification_label.modulate.a = 1.0
 	notification_tween.tween_interval(2.4)
-	notification_tween.tween_property(notification_label, "modulate:a", 0.0, 0.45)
+	notification_tween.tween_property(notification_label, "modulate:a", 0.0, 0.42)
 	notification_tween.tween_callback(func():
 		if is_instance_valid(notification_label):
 			notification_label.visible = false
-	)
-
-func _spawn_floating_text(text: String, world_pos: Vector3, color: Color) -> void:
-	var cam: Camera3D = get_viewport().get_camera_3d()
-	if not cam or cam.is_position_behind(world_pos):
-		return
-
-	var screen_pos: Vector2 = cam.unproject_position(world_pos)
-	var label := Label.new()
-	label.text = text
-	label.modulate = color
-	label.position = screen_pos + Vector2(randf_range(-18, 18), randf_range(-12, 12))
-	label.add_theme_font_size_override("font_size", 19)
-	label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.9))
-	label.add_theme_constant_override("outline_size", 4)
-	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	floating_text_layer.add_child(label)
-
-	var tween: Tween = label.create_tween()
-	tween.tween_property(label, "position:y", label.position.y - 48.0, 0.72).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tween.parallel().tween_property(label, "modulate:a", 0.0, 0.72)
-	tween.tween_callback(func():
-		if is_instance_valid(label):
-			label.queue_free()
 	)

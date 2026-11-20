@@ -24,14 +24,12 @@ func detonate() -> void:
 	_detonated = true
 
 	var origin: Vector3 = global_position
-	var dmg_mult: float = EconomyManager.get_upgrade_total_multiplier(&"tool_damage")
-	var total_dmg: float = base_blast_damage * dmg_mult
+	var effective_radius: float = blast_radius * EconomyManager.get_aoe_radius_multiplier()
+	var total_dmg: float = base_blast_damage * EconomyManager.get_c4_damage_multiplier()
 
-	# Genera VFX su current_scene PRIMA di distruggere il blocco padre
-	_spawn_explosion_vfx(origin)
-	EventBus.explosion_triggered.emit(origin, blast_radius)
+	_spawn_explosion_vfx(origin, effective_radius)
+	EventBus.explosion_triggered.emit(origin, effective_radius)
 
-	# Danneggia tutti i blocchi della struttura nel raggio di esplosione
 	var sm := GameManager.current_structure as StructureManager
 	if is_instance_valid(sm):
 		var snapshot: Array[DestructibleBlock] = sm.active_intact_blocks.duplicate()
@@ -39,17 +37,16 @@ func detonate() -> void:
 			if not is_instance_valid(b) or b.is_destroyed:
 				continue
 			var dist: float = b.global_position.distance_to(origin)
-			if dist <= blast_radius:
-				var falloff: float = clampf(1.0 - (dist / (blast_radius * 1.15)), 0.45, 1.0)
+			if dist <= effective_radius:
+				var falloff: float = clampf(1.0 - (dist / (effective_radius * 1.15)), 0.45, 1.0)
 				var dir: Vector3 = (b.global_position - origin).normalized()
 				if dir.length_squared() < 0.001:
 					dir = Vector3.UP
 				b.take_damage(total_dmg * falloff, blast_penetration, b.global_position, dir)
 
-	# Rimuovi la carica in sicurezza
 	queue_free()
 
-func _spawn_explosion_vfx(origin: Vector3) -> void:
+func _spawn_explosion_vfx(origin: Vector3, radius: float) -> void:
 	var root := get_tree().current_scene
 	if not root:
 		return
@@ -58,14 +55,12 @@ func _spawn_explosion_vfx(origin: Vector3) -> void:
 	root.add_child(vfx_holder)
 	vfx_holder.global_position = origin
 
-	# 1. Luce flash esplosiva
 	var flash := OmniLight3D.new()
 	flash.light_color = Color(1.0, 0.62, 0.18)
 	flash.light_energy = 12.0
-	flash.omni_range = blast_radius * 3.5
+	flash.omni_range = radius * 3.2
 	vfx_holder.add_child(flash)
 
-	# 2. Onda d'urto sferica in espansione
 	var wave := MeshInstance3D.new()
 	var smesh := SphereMesh.new()
 	smesh.radius = 0.5
@@ -78,19 +73,18 @@ func _spawn_explosion_vfx(origin: Vector3) -> void:
 	wave.material_override = wmat
 	vfx_holder.add_child(wave)
 
-	# 3. Particelle fuoco & fumo
 	var sparks := CPUParticles3D.new()
 	sparks.one_shot = true
 	sparks.explosiveness = 0.96
-	sparks.amount = 34
-	sparks.lifetime = 0.68
+	sparks.amount = 24
+	sparks.lifetime = 0.62
 	var pmesh := BoxMesh.new()
 	pmesh.size = Vector3(0.18, 0.18, 0.18)
 	sparks.mesh = pmesh
 	sparks.direction = Vector3.UP
 	sparks.spread = 180.0
 	sparks.initial_velocity_min = 4.5
-	sparks.initial_velocity_max = 11.5
+	sparks.initial_velocity_max = 11.0
 	sparks.gravity = Vector3(0, -8.5, 0)
 	var pmat := StandardMaterial3D.new()
 	pmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -100,10 +94,10 @@ func _spawn_explosion_vfx(origin: Vector3) -> void:
 	sparks.emitting = true
 
 	var t := vfx_holder.create_tween()
-	t.tween_property(wave, "scale", Vector3.ONE * (blast_radius * 1.45), 0.24).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+	t.tween_property(wave, "scale", Vector3.ONE * (radius * 1.45), 0.24).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
 	t.parallel().tween_property(wmat, "albedo_color:a", 0.0, 0.26)
 	t.parallel().tween_property(flash, "light_energy", 0.0, 0.30)
-	t.tween_interval(0.55)
+	t.tween_interval(0.50)
 	t.tween_callback(func():
 		if is_instance_valid(vfx_holder):
 			vfx_holder.queue_free()

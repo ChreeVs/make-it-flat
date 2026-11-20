@@ -6,7 +6,7 @@
 script = ExtResource("1_script")
 tool_id = &"c4_charge"
 display_name = "Carica C4 da Cantiere"
-unlock_cost = 3200.0
+unlock_cost = 7500.0
 required_tier = 3
 base_damage = 900.0
 hardness_penetration = 4

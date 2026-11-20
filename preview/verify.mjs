@@ -8,6 +8,10 @@ const ROOT = path.resolve(__dirname, '..');
 const required = [
   'project.godot',
   'scenes/MainGame.tscn',
+  'scenes/ui/HUD.tscn',
+  'scenes/ui/SkillTreeMenu.tscn',
+  'scenes/ui/MainMenu.tscn',
+  'scenes/ui/SettingsMenu.tscn',
   'autoload/EventBus.gd',
   'autoload/SaveManager.gd',
   'autoload/EconomyManager.gd',

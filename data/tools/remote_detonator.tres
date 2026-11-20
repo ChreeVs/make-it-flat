@@ -6,7 +6,7 @@
 script = ExtResource("1_script")
 tool_id = &"remote_detonator"
 display_name = "Detonatore Remoto a Catena"
-unlock_cost = 1200.0
+unlock_cost = 2500.0
 required_tier = 3
 base_damage = 0.0
 hardness_penetration = 5

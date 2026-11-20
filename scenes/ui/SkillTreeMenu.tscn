@@ -1,0 +1,197 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/SkillTreeMenu.gd" id="1_skills"]
+
+[sub_resource type="StyleBoxFlat" id="Style_Modal"]
+bg_color = Color(0.055, 0.068, 0.092, 0.97)
+border_width_left = 2
+border_width_top = 3
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.96, 0.70, 0.14, 0.95)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+
+[sub_resource type="StyleBoxFlat" id="Style_Canvas"]
+bg_color = Color(0.038, 0.048, 0.066, 0.95)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.20, 0.26, 0.34, 0.9)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="Style_Side"]
+content_margin_left = 16.0
+content_margin_top = 16.0
+content_margin_right = 16.0
+content_margin_bottom = 16.0
+bg_color = Color(0.08, 0.10, 0.135, 0.96)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.26, 0.33, 0.42, 0.9)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="Style_HeaderSep"]
+bg_color = Color(0.22, 0.28, 0.36, 0.8)
+
+[node name="SkillTreeMenu" type="Control"]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_skills")
+
+[node name="Dimmer" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.02, 0.025, 0.035, 0.78)
+
+[node name="Panel" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -520.0
+offset_top = -315.0
+offset_right = 520.0
+offset_bottom = 315.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("Style_Modal")
+
+[node name="Margin" type="MarginContainer" parent="Panel"]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 18
+
+[node name="VBox" type="VBoxContainer" parent="Panel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Header" type="HBoxContainer" parent="Panel/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="Panel/Margin/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.98, 0.76, 0.22, 1)
+theme_override_font_sizes/font_size = 21
+text = "ALBERO DELLE ABILITÀ  [K]"
+
+[node name="MoneyLabel" type="Label" parent="Panel/Margin/VBox/Header"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.34, 0.96, 0.52, 1)
+theme_override_font_sizes/font_size = 18
+text = "Capitale: € 0"
+
+[node name="ShopSwitchButton" type="Button" parent="Panel/Margin/VBox/Header"]
+custom_minimum_size = Vector2(145, 34)
+layout_mode = 2
+text = "Officina [B]"
+
+[node name="CloseButton" type="Button" parent="Panel/Margin/VBox/Header"]
+custom_minimum_size = Vector2(96, 34)
+layout_mode = 2
+text = "Chiudi"
+
+[node name="Sep" type="Panel" parent="Panel/Margin/VBox"]
+custom_minimum_size = Vector2(0, 2)
+layout_mode = 2
+theme_override_styles/panel = SubResource("Style_HeaderSep")
+
+[node name="Body" type="HBoxContainer" parent="Panel/Margin/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 16
+
+[node name="TreeFrame" type="PanelContainer" parent="Panel/Margin/VBox/Body"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 2.2
+theme_override_styles/panel = SubResource("Style_Canvas")
+
+[node name="TreeCanvas" type="Control" parent="Panel/Margin/VBox/Body/TreeFrame"]
+layout_mode = 2
+
+[node name="DetailPanel" type="PanelContainer" parent="Panel/Margin/VBox/Body"]
+custom_minimum_size = Vector2(290, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/panel = SubResource("Style_Side")
+
+[node name="DetailVBox" type="VBoxContainer" parent="Panel/Margin/VBox/Body/DetailPanel"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="BranchTag" type="Label" parent="Panel/Margin/VBox/Body/DetailPanel/DetailVBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.96, 0.72, 0.22, 1)
+theme_override_font_sizes/font_size = 12
+text = "RAMO RADICE"
+
+[node name="NodeTitle" type="Label" parent="Panel/Margin/VBox/Body/DetailPanel/DetailVBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.98, 0.98, 1, 1)
+theme_override_font_sizes/font_size = 20
+text = "Forza Strutturale"
+autowrap_mode = 3
+
+[node name="NodeLevel" type="Label" parent="Panel/Margin/VBox/Body/DetailPanel/DetailVBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.82, 1, 1)
+theme_override_font_sizes/font_size = 14
+text = "Livello: 0 / 20"
+
+[node name="NodeDesc" type="Label" parent="Panel/Margin/VBox/Body/DetailPanel/DetailVBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.78, 0.83, 0.90, 1)
+theme_override_font_sizes/font_size = 13
+text = "Seleziona un nodo nell'albero per visualizzarne i dettagli."
+autowrap_mode = 3
+
+[node name="BonusBox" type="Label" parent="Panel/Margin/VBox/Body/DetailPanel/DetailVBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.36, 0.94, 0.54, 1)
+theme_override_font_sizes/font_size = 13
+text = "Bonus attuale: +0%"
+autowrap_mode = 3
+
+[node name="PrereqLabel" type="Label" parent="Panel/Margin/VBox/Body/DetailPanel/DetailVBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.45, 0.34, 1)
+theme_override_font_sizes/font_size = 12
+text = ""
+autowrap_mode = 3
+
+[node name="Spacer" type="Control" parent="Panel/Margin/VBox/Body/DetailPanel/DetailVBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="BuyButton" type="Button" parent="Panel/Margin/VBox/Body/DetailPanel/DetailVBox"]
+custom_minimum_size = Vector2(0, 46)
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "POTENZIA  (€ 45)"

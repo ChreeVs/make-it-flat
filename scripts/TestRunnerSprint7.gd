@@ -4,97 +4,101 @@ func _ready() -> void:
 	call_deferred("_run_test")
 
 func _run_test() -> void:
-	print("================================================================")
-	print("=== VERIFICA EDIFICI ARCHITETTONICI & PROGRESSIONE LIVELLI ===")
-	print("================================================================")
+	print("==================================================================")
+	print("=== VERIFICA SPRINT 7 (Architettura, Scale, Skill Tree & C4) ===")
+	print("==================================================================")
 
-	var contracts: Array[String] = [
-		"res://data/contracts/tier1_villa.tres",
-		"res://data/contracts/tier2_warehouse.tres",
-		"res://data/contracts/tier3_condominium.tres",
-		"res://data/contracts/tier4_industrial.tres",
-		"res://data/contracts/tier5_skyscraper.tres"
+	# 1. Verifica caricamento, stabilità e scale interne di tutti i 7 cantieri reali
+	var contracts: Array[Dictionary] = [
+		{"path": "res://data/contracts/tier1_fence.tres", "expect_stairs": false, "min_blocks": 18},
+		{"path": "res://data/contracts/tier1_shack.tres", "expect_stairs": false, "min_blocks": 80},
+		{"path": "res://data/contracts/tier1_wall.tres", "expect_stairs": false, "min_blocks": 40},
+		{"path": "res://data/contracts/tier2_garage.tres", "expect_stairs": true, "min_blocks": 200},
+		{"path": "res://data/contracts/tier3_palazzina.tres", "expect_stairs": true, "min_blocks": 300},
+		{"path": "res://data/contracts/tier4_warehouse.tres", "expect_stairs": true, "min_blocks": 250},
+		{"path": "res://data/contracts/tier5_skyscraper.tres", "expect_stairs": true, "min_blocks": 350}
 	]
 
-	# 1. Verifica caricamento e instanziazione delle 5 tipologie di edifici logici
-	for path in contracts:
+	for entry in contracts:
+		var path: String = entry["path"]
 		assert(ResourceLoader.exists(path), "File contratto inesistente: %s" % path)
-		var c: ContractData = load(path)
-		assert(c != null, "Caricamento contratto fallito: %s" % path)
-		assert(c.structure_scene != null, "Scena mancante per: %s" % c.title)
+		var c: ContractData = load(path) as ContractData
+		assert(c != null and c.structure_scene != null, "Contratto/Scena non validi: %s" % path)
 
-		var inst: Node3D = c.structure_scene.instantiate()
-		assert(inst != null, "Istanziazione fallita per: %s" % c.title)
+		var inst: Node3D = c.structure_scene.instantiate() as Node3D
+		assert(inst != null, "Istanziazione fallita: %s" % c.title)
 		add_child(inst)
 
 		for i in range(2):
 			await get_tree().physics_frame
 
-		# Conta blocchi generati ed elementi strutturali
 		var block_count: int = 0
 		var anchored_count: int = 0
+		var stair_count: int = 0
 		for child in inst.get_children():
 			if child is DestructibleBlock:
+				var blk := child as DestructibleBlock
 				block_count += 1
-				if (child as DestructibleBlock).is_anchored:
+				if blk.is_anchored:
 					anchored_count += 1
+				if blk.block_shape in [
+					DestructibleBlock.BlockShape.STAIR_NORTH,
+					DestructibleBlock.BlockShape.STAIR_SOUTH,
+					DestructibleBlock.BlockShape.STAIR_EAST,
+					DestructibleBlock.BlockShape.STAIR_WEST
+				]:
+					stair_count += 1
 
-		print("[OK] %s (Tier %d): %d blocchi totali | %d ancorati a terra" % [c.title, c.tier, block_count, anchored_count])
-		assert(block_count >= 50, "Numero insufficiente di blocchi (%d) per %s" % [block_count, c.title])
-		assert(anchored_count >= 4, "Troppi pochi blocchi ancorati (%d) per %s" % [anchored_count, c.title])
+		assert(block_count >= int(entry["min_blocks"]), "Blocchi insufficienti (%d) in %s" % [block_count, c.title])
+		assert(anchored_count >= 2, "Ancoraggi insufficienti (%d) in %s" % [anchored_count, c.title])
+		if bool(entry["expect_stairs"]):
+			assert(stair_count > 0, "Scale interne mancanti in %s!" % c.title)
 
+		print("[OK] %s (T%d): %d blocchi | %d ancorati | %d rampe scale" % [
+			c.title, c.tier, block_count, anchored_count, stair_count
+		])
 		inst.queue_free()
 		await get_tree().process_frame
 
-	# 2. Verifica sequenza di gioco e transizione automatica
-	print("\n[2] Test avvio partita e transizione automatica al livello successivo...")
+	# 2. Verifica Economia C4 a pagamento e Albero delle Abilità
+	print("\n[2] Verifica costo C4 per carica e prerequisiti Skill Tree...")
+	EconomyManager.reset_for_new_career()
+	assert(EconomyManager.get_c4_unit_cost() == EconomyManager.C4_BASE_UNIT_COST, "Costo base C4 non allineato!")
+	assert(not EconomyManager.try_pay_c4_charge(), "Il C4 deve fallire con saldo insufficiente!")
+	EconomyManager.add_money(500.0)
+	assert(EconomyManager.try_pay_c4_charge(), "Il C4 deve scalare il costo con fondi sufficienti!")
+	assert(is_equal_approx(EconomyManager.current_money, 500.0 - EconomyManager.C4_BASE_UNIT_COST), "Saldo post-C4 errato!")
+
+	# Verifica prerequisiti albero delle abilità
+	assert(not EconomyManager.is_skill_prereq_met(&"attack_speed"), "attack_speed deve richiedere tool_damage >= 1!")
+	assert(not EconomyManager.purchase_upgrade(&"attack_speed", true), "Acquisto senza prerequisito deve essere bloccato!")
+	assert(EconomyManager.purchase_upgrade(&"tool_damage", true), "Acquisto nodo radice tool_damage fallito!")
+	assert(EconomyManager.is_skill_prereq_met(&"attack_speed"), "Prerequisito attack_speed ora deve essere soddisfatto!")
+	print("[OK] C4 a pagamento (€%.0f/carica) e prerequisiti Skill Tree verificati." % EconomyManager.get_c4_unit_cost())
+
+	# 3. Verifica MainGame, Ambientazione 3D, Menu Principale, SkillTree, Impostazioni & Fisica Scale
+	print("\n[3] Verifica MainGame, UI completa e salita scale Player...")
 	var main_scene: PackedScene = load("res://scenes/MainGame.tscn")
-	var main_game: Node3D = main_scene.instantiate()
+	var main_game: Node3D = main_scene.instantiate() as Node3D
 	add_child(main_game)
 
-	for i in range(5):
+	for i in range(4):
 		await get_tree().physics_frame
 
-	assert(GameManager.current_contract != null, "Nessun contratto caricato all'avvio!")
-	print("[OK] Cantiere iniziale attivo: %s (Tier %d)" % [GameManager.current_contract.title, GameManager.current_contract.tier])
-	assert(GameManager.current_contract.contract_id == &"tier1_villa", "Il cantiere iniziale deve essere tier1_villa!")
+	assert(main_game.find_child("EnvironmentScenery", true, false) != null, "EnvironmentScenery mancante!")
+	assert(main_game.find_child("MainMenu", true, false) != null, "MainMenu mancante!")
+	assert(main_game.find_child("SkillTreeMenu", true, false) != null, "SkillTreeMenu mancante!")
+	assert(main_game.find_child("SettingsMenu", true, false) != null, "SettingsMenu mancante!")
+	assert(main_game.find_child("HUD", true, false) != null, "HUD mancante!")
 
-	# Simula completamento contratto Villa
-	var initial_money: float = EconomyManager.current_money
-	GameManager.complete_current_contract()
-	assert(GameManager.contract_bonus_claimed, "Il bonus di completamento deve risultare incassato!")
-	assert(EconomyManager.current_money > initial_money, "Il saldo economico non è aumentato!")
-	assert(GameManager.auto_advance_timer > 0.0, "Il timer di avanzamento automatico deve essere attivo!")
-	print("[OK] Contratto completato: +€%.0f | auto_advance_timer = %.1fs" % [
-		EconomyManager.current_money - initial_money,
-		GameManager.auto_advance_timer
-	])
-
-	# Esegui avanzamento al prossimo cantiere (Capannone)
-	GameManager.advance_to_next_contract()
-	for i in range(5):
-		await get_tree().physics_frame
-
-	assert(GameManager.current_contract != null, "Nessun cantiere caricato dopo l'avanzamento!")
-	print("[OK] Avanzamento automatico completato con successo: %s (Tier %d)" % [
-		GameManager.current_contract.title,
-		GameManager.current_contract.tier
-	])
-	assert(GameManager.current_contract.contract_id == &"tier2_warehouse", "Il secondo cantiere della sequenza deve essere tier2_warehouse!")
-
-	# 3. Verifica Comandi Crouch e Salto sul Giocatore
 	var player: Player = main_game.find_child("Player", true, false) as Player
-	assert(player != null, "Player non trovato nella scena!")
-	assert(player.base_jump_velocity > 4.5, "Velocità di salto non configurata!")
-	assert(player.base_crouch_speed < player.base_walk_speed, "Velocità crouch non calibrata!")
-	print("[OK] Controlli Player: Salto (%.1f m/s), Camminata (%.1f m/s), Crouch (%.1f m/s)" % [
-		player.base_jump_velocity,
-		player.base_walk_speed,
-		player.base_crouch_speed
-	])
+	assert(player != null, "Player non trovato!")
+	assert(player.floor_max_angle >= deg_to_rad(50.0), "floor_max_angle troppo basso per salire le scale!")
+	assert(player.floor_snap_length >= 0.30, "floor_snap_length troppo basso per scale fluide!")
+	print("[OK] MainGame, UI (MainMenu/SkillTree/Settings/HUD) e fisica scale Player verificati.")
 
 	main_game.queue_free()
-	print("\n================================================================")
-	print("=== TUTTI I TEST ARCHITETTURA E LIVELLI SUPERATI CON SUCCESSO! ===")
-	print("================================================================\n")
+	print("\n==================================================================")
+	print("=== TUTTI I TEST SPRINT 7 SUPERATI CON SUCCESSO! ===")
+	print("==================================================================\n")
 	get_tree().quit(0)

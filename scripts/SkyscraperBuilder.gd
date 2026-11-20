@@ -1,10 +1,9 @@
 class_name SkyscraperBuilder
 extends StructureManager
 
-@export var tower_width: int = 14     # 7 metri
-@export var tower_depth: int = 14     # 7 metri
-@export var tower_height: int = 28    # 14 metri (7 piani totali)
-@export var spire_height: int = 8     # Guglia/Antenna sommitale
+@export var tower_width: int = 8
+@export var tower_depth: int = 8
+@export var tower_height: int = 12
 
 func _ready() -> void:
 	if get_child_count() == 0:
@@ -15,101 +14,103 @@ func generate_skyscraper() -> void:
 	var block_scene: PackedScene = load("res://scenes/structures/DestructibleBlock.tscn")
 	var mat_steel: MaterialData = load("res://data/materials/steel_beam.tres")
 	var mat_concrete: MaterialData = load("res://data/materials/concrete_reinforced.tres")
-	var mat_brick: MaterialData = load("res://data/materials/brick_dry.tres")
 
-	var half_w: int = int(tower_width * 0.5)
-	var half_d: int = int(tower_depth * 0.5)
-
-	# 1. 8 Grandi Colonne Portanti Perimetrali in Acciaio Pesante
-	var col_x: Array[int] = [0, half_w, tower_width - 1]
-	var col_z: Array[int] = [0, half_w, tower_depth - 1]
-
-	# Core centrale in cemento armato (vano 4 ascensori e impianti)
-	var core_x_min: int = half_w - 2
-	var core_x_max: int = half_w + 1
-	var core_z_min: int = half_d - 2
-	var core_z_max: int = half_d + 1
+	var floor_h: int = 4
 
 	for y in range(tower_height):
-		var is_slab: bool = (y > 0 and (y % 4 == 0 or y == tower_height - 1))
-		var is_penthouse: bool = (y >= tower_height - 4)
+		var local_y: int = y % floor_h
+		var is_slab_level: bool = (local_y == floor_h - 1)
 
 		for z in range(tower_depth):
 			for x in range(tower_width):
-				var is_corner_col: bool = (x == 0 or x == tower_width - 1) and (z == 0 or z == tower_depth - 1)
-				var is_perimeter_col: bool = (col_x.has(x) and (z == 0 or z == tower_depth - 1)) or (col_z.has(z) and (x == 0 or x == tower_width - 1))
-				var is_core: bool = (x >= core_x_min and x <= core_x_max and z >= core_z_min and z <= core_z_max)
-				var is_perimeter: bool = (x == 0 or x == tower_width - 1 or z == 0 or z == tower_depth - 1)
+				var is_corner: bool = (x == 0 or x == tower_width - 1) and (z == 0 or z == tower_depth - 1)
+				var is_front_back: bool = (z == 0 or z == tower_depth - 1)
+				var is_side: bool = (x == 0 or x == tower_width - 1)
+				var is_perimeter: bool = is_front_back or is_side
 
-				# Penthouse rientrato di 1 blocco
-				if is_penthouse and is_perimeter:
-					continue
-
-				if not is_slab:
-					if y == 0 and not is_perimeter_col and not is_core:
-						continue
-					if not is_perimeter and not is_perimeter_col and not is_core:
+				if is_perimeter:
+					# Ampia hall d'ingresso al piano terra (+Z)
+					if z == tower_depth - 1 and (x == 3 or x == 4) and y <= 1:
 						continue
 
-					# Piano terra: Grande atrio vetrato a doppia altezza
-					if y < 4 and not is_perimeter_col and not is_core:
+					var block: DestructibleBlock = block_scene.instantiate()
+					if is_corner:
+						block.material_data = mat_steel
+						block.block_shape = DestructibleBlock.BlockShape.PILLAR
+					elif z == tower_depth - 1 and (x == 3 or x == 4) and y == 2:
+						block.material_data = mat_steel
+						block.block_shape = DestructibleBlock.BlockShape.DOOR_LINTEL_X
+					elif is_slab_level:
+						block.material_data = mat_steel
+						block.block_shape = DestructibleBlock.BlockShape.BEAM_X if is_front_back else DestructibleBlock.BlockShape.BEAM_Z
+					elif local_y == 1 or local_y == 2:
+						# Facciata continua vetrata da grattacielo moderno
+						block.material_data = mat_concrete
+						block.block_shape = DestructibleBlock.BlockShape.WINDOW_X if is_front_back else DestructibleBlock.BlockShape.WINDOW_Z
+					else:
+						block.material_data = mat_concrete
+						block.block_shape = DestructibleBlock.BlockShape.WALL_X if is_front_back else DestructibleBlock.BlockShape.WALL_Z
+
+					block.position = Vector3(
+						float(x - int(tower_width * 0.5)) * block_size,
+						(float(y) + 0.5) * block_size,
+						float(z - int(tower_depth * 0.5)) * block_size
+					)
+					block.name = "Tower_%d_%d_%d" % [x, y, z]
+					block.grid_coord = Vector3i(x, y, z)
+					if y == 0 and is_corner:
+						block.is_anchored = true
+					add_child(block)
+
+				elif is_slab_level:
+					# Solette dei piani con tromba scale interna su x=1, z=2..5
+					if x == 1 and (z >= 2 and z <= 5):
 						continue
+					var slab: DestructibleBlock = block_scene.instantiate()
+					slab.material_data = mat_concrete
+					slab.block_shape = DestructibleBlock.BlockShape.SLAB
+					slab.position = Vector3(
+						float(x - int(tower_width * 0.5)) * block_size,
+						(float(y) + 0.5) * block_size,
+						float(z - int(tower_depth * 0.5)) * block_size
+					)
+					slab.name = "Tower_Slab_%d_%d_%d" % [x, y, z]
+					slab.grid_coord = Vector3i(x, y, z)
+					add_child(slab)
 
-					# Facciata continua a nastro (vetrate perimetrali aperte a intervalli di piano)
-					if not is_perimeter_col and not is_core and (y % 4 == 2 or y % 4 == 3):
-						# Fasce finestre vetrate aperte
-						if (x % 3 != 0 and z % 3 != 0):
-							continue
+	# VANO SCALE INTERNO A RAMPE ALTERNATE fino alla terrazza eliporto (3 piani x 4 gradini)
+	for f in range(3):
+		var base_y: int = f * floor_h
+		var going_north: bool = (f % 2 == 0)
+		for step_i in range(floor_h):
+			var sy: int = base_y + step_i
+			var sz: int = (5 - step_i) if going_north else (2 + step_i)
+			var stair: DestructibleBlock = block_scene.instantiate()
+			stair.material_data = mat_steel
+			stair.block_shape = DestructibleBlock.BlockShape.STAIR_NORTH if going_north else DestructibleBlock.BlockShape.STAIR_SOUTH
+			stair.position = Vector3(
+				float(1 - int(tower_width * 0.5)) * block_size,
+				(float(sy) + 0.5) * block_size,
+				float(sz - int(tower_depth * 0.5)) * block_size
+			)
+			stair.name = "Tower_Stair_%d_%d" % [f, step_i]
+			stair.grid_coord = Vector3i(1, sy, sz)
+			add_child(stair)
 
-				var block: DestructibleBlock = block_scene.instantiate()
-				if is_perimeter_col:
-					block.material_data = mat_steel
-				elif is_core or is_slab:
-					block.material_data = mat_concrete
-				else:
-					block.material_data = mat_concrete if (y % 4 == 0 or y % 4 == 1) else mat_brick
-
-				var x_pos: float = float(x - half_w) * block_size
-				var y_pos: float = (float(y) + 0.5) * block_size
-				var z_pos: float = float(z - half_d) * block_size
-
-				block.position = Vector3(x_pos, y_pos, z_pos)
-				block.name = "Tower_%d_%d_%d" % [x, y, z]
-				block.grid_coord = Vector3i(x, y, z)
-				if y == 0 and (is_perimeter_col or is_core):
-					block.is_anchored = true
-
-				add_child(block)
-
-	# 2. ELIPORTO SOMMITALE E PARAPETTO (Helipad sul tetto)
-	var helipad_y: int = tower_height
+	# Corona sommitale / bordo eliporto
+	var crown_y: int = tower_height
 	for z in range(2, tower_depth - 2):
 		for x in range(2, tower_width - 2):
-			var is_edge: bool = (x == 2 or x == tower_width - 3 or z == 2 or z == tower_depth - 3)
-			# Marcature 'H' centrale in acciaio
-			var is_h_cross: bool = (abs(z - half_d) <= 1 and (abs(x - half_w) == 2 or (z == half_d and abs(x - half_w) <= 2)))
-
-			var block: DestructibleBlock = block_scene.instantiate()
-			block.material_data = mat_steel if (is_edge or is_h_cross) else mat_concrete
-
-			var x_pos: float = float(x - half_w) * block_size
-			var y_pos: float = (float(helipad_y) + 0.5) * block_size
-			var z_pos: float = float(z - half_d) * block_size
-
-			block.position = Vector3(x_pos, y_pos, z_pos)
-			block.name = "Helipad_%d_%d" % [x, z]
-			block.grid_coord = Vector3i(x, helipad_y, z)
-			add_child(block)
-
-	# 3. GUGLIA / ANTENNA DI TELECOMUNICAZIONE
-	for ay in range(helipad_y + 1, helipad_y + 1 + spire_height):
-		var ant: DestructibleBlock = block_scene.instantiate()
-		ant.material_data = mat_steel
-		var x_pos: float = 0.0
-		var y_pos: float = (float(ay) + 0.5) * block_size
-		var z_pos: float = 0.0
-
-		ant.position = Vector3(x_pos, y_pos, z_pos)
-		ant.name = "Spire_%d" % ay
-		ant.grid_coord = Vector3i(half_w, ay, half_d)
-		add_child(ant)
+			if not (x == 2 or x == tower_width - 3 or z == 2 or z == tower_depth - 3):
+				continue
+			var crown: DestructibleBlock = block_scene.instantiate()
+			crown.material_data = mat_steel
+			crown.block_shape = DestructibleBlock.BlockShape.SLAB_BOTTOM
+			crown.position = Vector3(
+				float(x - int(tower_width * 0.5)) * block_size,
+				(float(crown_y) + 0.5) * block_size,
+				float(z - int(tower_depth * 0.5)) * block_size
+			)
+			crown.name = "Tower_Crown_%d_%d" % [x, z]
+			crown.grid_coord = Vector3i(x, crown_y, z)
+			add_child(crown)

@@ -2,7 +2,7 @@ extends Node
 
 const SAMPLE_RATE: int = 22050
 const POOL_SIZE: int = 20
-const COIN_COOLDOWN_MS: int = 75
+const COIN_COOLDOWN_MS: int = 90
 
 var _players: Array[AudioStreamPlayer] = []
 var _next_player_idx: int = 0
@@ -18,6 +18,7 @@ var wav_explosion: AudioStreamWAV
 var wav_coin: AudioStreamWAV
 var wav_drill_tick: AudioStreamWAV
 var wav_ui_click: AudioStreamWAV
+var wav_ui_error: AudioStreamWAV
 
 func _ready() -> void:
 	for i in range(POOL_SIZE):
@@ -36,6 +37,7 @@ func _ready() -> void:
 	EventBus.currency_changed.connect(_on_currency_changed)
 	EventBus.tool_swung.connect(_on_tool_swung)
 	EventBus.ui_click.connect(_on_ui_click)
+	EventBus.ui_error.connect(_on_ui_error)
 
 func _generate_all_clips() -> void:
 	wav_hit_wood = _synth_impact(0.11, 185.0, 80.0, 0.45, 22.0)
@@ -48,6 +50,7 @@ func _generate_all_clips() -> void:
 	wav_coin = _synth_coin(0.16)
 	wav_drill_tick = _synth_impact(0.06, 310.0, 140.0, 0.55, 38.0)
 	wav_ui_click = _synth_impact(0.045, 760.0, 420.0, 0.12, 62.0)
+	wav_ui_error = _synth_impact(0.16, 220.0, 110.0, 0.25, 18.0)
 
 func _make_wav(samples: PackedFloat32Array) -> AudioStreamWAV:
 	var bytes := PackedByteArray()
@@ -189,7 +192,7 @@ func _on_currency_changed(_new_amount: float, delta: float) -> void:
 	var now: int = Time.get_ticks_msec()
 	if now - _last_coin_ms >= COIN_COOLDOWN_MS:
 		_last_coin_ms = now
-		_play_clip(wav_coin, -11.0, 0.98, 1.08)
+		_play_clip(wav_coin, -12.0, 0.98, 1.08)
 
 func _on_tool_swung(tool_data: Resource) -> void:
 	if tool_data is ToolData and tool_data.behavior_type == ToolData.BehaviorType.CONTINUOUS_DRILL:
@@ -197,3 +200,6 @@ func _on_tool_swung(tool_data: Resource) -> void:
 
 func _on_ui_click() -> void:
 	_play_clip(wav_ui_click, -9.0, 0.98, 1.04)
+
+func _on_ui_error() -> void:
+	_play_clip(wav_ui_error, -7.0, 0.95, 1.02)

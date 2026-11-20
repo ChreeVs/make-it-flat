@@ -6,7 +6,7 @@
 script = ExtResource("1_script")
 tool_id = &"sledgehammer_3kg"
 display_name = "Mazza da Cantiere (3kg)"
-unlock_cost = 350.0
+unlock_cost = 500.0
 required_tier = 1
 base_damage = 120.0
 hardness_penetration = 1

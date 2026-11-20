@@ -21,12 +21,13 @@ signal contract_progress_updated(ratio: float, destroyed_mass: float, total_mass
 signal contract_threshold_reached(contract_data: Resource)
 signal contract_completed(contract_data: Resource)
 signal prestige_performed(new_prestige_count: int, new_multiplier: float)
+signal game_state_changed(state_name: String)
 
-# Eventi UI / HUD / Feedback
+# Eventi UI / HUD / Impostazioni / Audio
 signal show_floating_text(text: String, world_pos: Vector3, color: Color)
 signal show_notification(message: String, color: Color)
 signal target_block_hovered(block: Node3D)
 signal explosives_count_changed(count: int)
+signal settings_changed()
 signal ui_click()
-signal level_completed_countdown(seconds_left: float, next_contract_name: String)
-signal player_stance_changed(is_crouching: bool)
+signal ui_error()

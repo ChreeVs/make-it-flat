@@ -6,7 +6,7 @@
 script = ExtResource("1_script")
 tool_id = &"hammer"
 display_name = "Martello da Carpentiere"
-unlock_cost = 120.0
+unlock_cost = 150.0
 required_tier = 1
 base_damage = 65.0
 hardness_penetration = 1

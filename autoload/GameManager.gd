@@ -1,58 +1,90 @@
 extends Node
 
-const PLAYER_SAFE_SPAWN := Vector3(0.0, 1.0, 9.5)
-
-const CONTRACT_SEQUENCE: Array[String] = [
-	"res://data/contracts/tier1_villa.tres",
-	"res://data/contracts/tier2_warehouse.tres",
-	"res://data/contracts/tier3_condominium.tres",
-	"res://data/contracts/tier4_industrial.tres",
-	"res://data/contracts/tier5_skyscraper.tres"
-]
+const PLAYER_SAFE_SPAWN := Vector3(0.0, 1.0, 12.0)
 
 var current_contract: ContractData = null
 var current_structure: Node3D = null
 var structure_container: Node3D = null
 
+var is_main_menu_open: bool = true
+var is_intro_open: bool = false
+var is_pause_menu_open: bool = false
+var is_settings_open: bool = false
 var is_shop_open: bool = false
+var is_skill_tree_open: bool = false
 var is_contract_menu_open: bool = false
 var contract_bonus_claimed: bool = false
 
 var placed_explosives: Array[Node3D] = []
 
-# Avanzamento automatico al livello successivo
-const AUTO_ADVANCE_DELAY: float = 3.5
-var auto_advance_timer: float = -1.0
-var next_contract_to_load: ContractData = null
-
 func _ready() -> void:
 	EventBus.contract_selected.connect(_on_contract_selected)
 
-func _process(delta: float) -> void:
-	if auto_advance_timer > 0.0:
-		auto_advance_timer -= delta
-		var next_name: String = next_contract_to_load.title if next_contract_to_load else "Prossimo cantiere"
-		EventBus.level_completed_countdown.emit(maxf(auto_advance_timer, 0.0), next_name)
-		if auto_advance_timer <= 0.0:
-			auto_advance_timer = -1.0
-			advance_to_next_contract()
+func is_any_ui_open() -> bool:
+	return (
+		is_main_menu_open
+		or is_intro_open
+		or is_pause_menu_open
+		or is_settings_open
+		or is_shop_open
+		or is_skill_tree_open
+		or is_contract_menu_open
+	)
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("ui_cancel"):
-		if is_shop_open:
-			var shop := get_tree().get_root().find_child("ShopMenu", true, false)
-			if shop and shop.has_method("close_shop"):
-				shop.close_shop()
-				return
-		if is_contract_menu_open:
-			var cmenu := get_tree().get_root().find_child("ContractMenu", true, false)
-			if cmenu and cmenu.has_method("close_menu"):
-				cmenu.close_menu()
-				return
-		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-		else:
-			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	if not event.is_action_pressed("ui_cancel"):
+		return
+
+	# Se siamo nel menu principale, ESC chiude solo eventuali sottoschermate (Impostazioni / Intro)
+	if is_main_menu_open:
+		if is_settings_open:
+			_close_node("SettingsMenu", "close_settings")
+		elif is_intro_open:
+			_close_node("MainMenu", "close_intro")
+		return
+
+	# In gioco: chiudi il pannello aperto, altrimenti apri/chiudi Menu Pausa
+	if is_settings_open:
+		_close_node("SettingsMenu", "close_settings")
+		return
+	if is_shop_open:
+		_close_node("ShopMenu", "close_shop")
+		return
+	if is_skill_tree_open:
+		_close_node("SkillTreeMenu", "close_menu")
+		return
+	if is_contract_menu_open:
+		_close_node("ContractMenu", "close_menu")
+		return
+	if is_intro_open:
+		_close_node("MainMenu", "close_intro")
+		return
+
+	var main_menu := get_tree().get_root().find_child("MainMenu", true, false)
+	if main_menu:
+		if is_pause_menu_open and main_menu.has_method("resume_game"):
+			main_menu.resume_game()
+		elif not is_pause_menu_open and main_menu.has_method("open_pause_menu"):
+			main_menu.open_pause_menu()
+
+func _close_node(node_name: String, method_name: String) -> void:
+	var node := get_tree().get_root().find_child(node_name, true, false)
+	if node and node.has_method(method_name):
+		node.call(method_name)
+
+func close_gameplay_overlays(except_name: String = "") -> void:
+	var pairs := [
+		["ShopMenu", "close_shop"],
+		["SkillTreeMenu", "close_menu"],
+		["ContractMenu", "close_menu"],
+		["SettingsMenu", "close_settings"]
+	]
+	for p in pairs:
+		if p[0] == except_name:
+			continue
+		var n := get_tree().get_root().find_child(p[0], true, false)
+		if n and n.visible and n.has_method(p[1]):
+			n.call(p[1])
 
 func _on_contract_selected(contract: ContractData) -> void:
 	load_contract(contract)
@@ -60,16 +92,10 @@ func _on_contract_selected(contract: ContractData) -> void:
 func load_contract(contract: ContractData) -> void:
 	if not contract:
 		return
-
-	auto_advance_timer = -1.0
 	current_contract = contract
 	contract_bonus_claimed = false
-
-	# Pulisci macerie precedenti e cariche C4 rimaste
 	clear_explosives()
-	DebrisPool.clear_all()
 
-	# Rimuovi vecchia struttura in modo pulito
 	if is_instance_valid(current_structure):
 		current_structure.queue_free()
 		current_structure = null
@@ -83,7 +109,7 @@ func load_contract(contract: ContractData) -> void:
 				structure_container = root.find_child("StructureContainer", true, false) as Node3D
 
 	if not is_instance_valid(structure_container):
-		push_error("GameManager: StructureContainer non trovato nella scena corrente!")
+		push_error("GameManager: StructureHolder non trovato nella scena corrente!")
 		return
 
 	if not contract.structure_scene:
@@ -95,7 +121,8 @@ func load_contract(contract: ContractData) -> void:
 		structure_container.add_child(inst)
 		current_structure = inst
 		_reposition_player_safely()
-		EventBus.show_notification.emit("Cantiere avviato: %s" % contract.title, Color(0.95, 0.80, 0.28))
+		if not is_main_menu_open:
+			EventBus.show_notification.emit("Cantiere pronto: %s" % contract.title, Color(0.96, 0.78, 0.24))
 
 func _reposition_player_safely() -> void:
 	var player := get_tree().get_first_node_in_group("player") as CharacterBody3D
@@ -116,7 +143,7 @@ func complete_current_contract() -> void:
 		return
 	contract_bonus_claimed = true
 
-	var bonus: float = current_contract.completion_bonus * EconomyManager.permanent_multiplier
+	var bonus: float = EconomyManager.get_contract_bonus(current_contract)
 	EconomyManager.add_money(bonus)
 
 	var cid: String = String(current_contract.contract_id)
@@ -129,7 +156,6 @@ func complete_current_contract() -> void:
 	stats["contracts_completed"] = int(stats.get("contracts_completed", 0)) + 1
 	SaveManager.save_data["stats"] = stats
 
-	# Sblocca automaticamente il Tier successivo se abbiamo completato un cantiere del Tier massimo attuale
 	if current_contract.tier >= EconomyManager.unlocked_tier and current_contract.tier < 5:
 		EconomyManager.unlock_tier(current_contract.tier + 1)
 		EventBus.show_notification.emit(
@@ -144,40 +170,6 @@ func complete_current_contract() -> void:
 
 	SaveManager.save_game()
 	EventBus.contract_completed.emit(current_contract)
-
-	# Calcola il prossimo contratto nella sequenza logica
-	_prepare_next_level_transition()
-
-func _prepare_next_level_transition() -> void:
-	var cur_path: String = current_contract.resource_path if current_contract else ""
-	var cur_idx: int = CONTRACT_SEQUENCE.find(cur_path)
-
-	var next_idx: int = 0
-	if cur_idx != -1:
-		next_idx = (cur_idx + 1) % CONTRACT_SEQUENCE.size()
-	else:
-		# Ricerca alternativa per tier
-		var t: int = current_contract.tier if current_contract else 1
-		next_idx = clampi(t, 0, CONTRACT_SEQUENCE.size() - 1)
-
-	var next_path: String = CONTRACT_SEQUENCE[next_idx]
-	if ResourceLoader.exists(next_path):
-		next_contract_to_load = load(next_path) as ContractData
-
-	auto_advance_timer = AUTO_ADVANCE_DELAY
-	var next_name: String = next_contract_to_load.title if next_contract_to_load else "Prossimo Livello"
-	EventBus.level_completed_countdown.emit(AUTO_ADVANCE_DELAY, next_name)
-
-func advance_to_next_contract() -> void:
-	auto_advance_timer = -1.0
-	if next_contract_to_load:
-		var target: ContractData = next_contract_to_load
-		next_contract_to_load = null
-		load_contract(target)
-	elif not CONTRACT_SEQUENCE.is_empty():
-		var first: ContractData = load(CONTRACT_SEQUENCE[0]) as ContractData
-		if first:
-			load_contract(first)
 
 func register_explosive(charge: Node3D) -> void:
 	_prune_explosives()
@@ -206,6 +198,7 @@ func clear_explosives() -> void:
 func detonate_all_explosives_sequentially() -> void:
 	_prune_explosives()
 	if placed_explosives.is_empty():
+		EventBus.ui_error.emit()
 		EventBus.show_notification.emit("Nessuna carica C4 piazzata!", Color(1.0, 0.55, 0.25))
 		return
 

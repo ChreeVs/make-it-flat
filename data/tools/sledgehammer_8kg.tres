@@ -6,7 +6,7 @@
 script = ExtResource("1_script")
 tool_id = &"sledgehammer_8kg"
 display_name = "Mazza Pesante Demolitrice (8kg)"
-unlock_cost = 950.0
+unlock_cost = 1800.0
 required_tier = 2
 base_damage = 260.0
 hardness_penetration = 2

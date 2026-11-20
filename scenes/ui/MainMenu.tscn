@@ -1,0 +1,305 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/MainMenu.gd" id="1_mainmenu"]
+
+[sub_resource type="StyleBoxFlat" id="Style_SidePanel"]
+content_margin_left = 34.0
+content_margin_top = 34.0
+content_margin_right = 34.0
+content_margin_bottom = 34.0
+bg_color = Color(0.05, 0.062, 0.085, 0.92)
+border_width_right = 3
+border_color = Color(0.96, 0.70, 0.14, 0.96)
+
+[sub_resource type="StyleBoxFlat" id="Style_Modal"]
+content_margin_left = 28.0
+content_margin_top = 24.0
+content_margin_right = 28.0
+content_margin_bottom = 24.0
+bg_color = Color(0.055, 0.068, 0.092, 0.97)
+border_width_left = 2
+border_width_top = 3
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.96, 0.70, 0.14, 0.96)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+
+[sub_resource type="StyleBoxFlat" id="Style_InfoBox"]
+content_margin_left = 14.0
+content_margin_top = 12.0
+content_margin_right = 14.0
+content_margin_bottom = 12.0
+bg_color = Color(0.09, 0.115, 0.155, 0.92)
+border_width_left = 3
+border_color = Color(0.32, 0.78, 1.0, 0.9)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxFlat" id="Style_AccentLine"]
+bg_color = Color(0.96, 0.70, 0.14, 0.9)
+
+[node name="MainMenu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_mainmenu")
+
+[node name="TitleScreen" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="SideBar" type="PanelContainer" parent="TitleScreen"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 430.0
+grow_vertical = 2
+theme_override_styles/panel = SubResource("Style_SidePanel")
+
+[node name="VBox" type="VBoxContainer" parent="TitleScreen/SideBar"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="TagLabel" type="Label" parent="TitleScreen/SideBar/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.96, 0.72, 0.18, 1)
+theme_override_font_sizes/font_size = 12
+text = "SIMULATORE INCREMENTALE 3D • GODOT 4"
+
+[node name="GameTitle" type="Label" parent="TitleScreen/SideBar/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.98, 0.99, 1, 1)
+theme_override_font_sizes/font_size = 44
+text = "MAKE IT FLAT"
+
+[node name="AccentLine" type="Panel" parent="TitleScreen/SideBar/VBox"]
+custom_minimum_size = Vector2(0, 3)
+layout_mode = 2
+theme_override_styles/panel = SubResource("Style_AccentLine")
+
+[node name="Subtitle" type="Label" parent="TitleScreen/SideBar/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.80, 0.88, 1)
+theme_override_font_sizes/font_size = 14
+text = "Esplora gli edifici, sali le scale interne, colpisci i punti portanti e abbatti ogni struttura."
+autowrap_mode = 3
+
+[node name="CareerSummary" type="PanelContainer" parent="TitleScreen/SideBar/VBox"]
+visible = false
+layout_mode = 2
+theme_override_styles/panel = SubResource("Style_InfoBox")
+
+[node name="SummaryText" type="Label" parent="TitleScreen/SideBar/VBox/CareerSummary"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.88, 0.94, 0.98, 1)
+theme_override_font_sizes/font_size = 13
+text = "Carriera attiva"
+autowrap_mode = 3
+
+[node name="SpacerTop" type="Control" parent="TitleScreen/SideBar/VBox"]
+custom_minimum_size = Vector2(0, 12)
+layout_mode = 2
+
+[node name="ContinueButton" type="Button" parent="TitleScreen/SideBar/VBox"]
+visible = false
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+theme_override_font_sizes/font_size = 17
+text = "CONTINUA CARRIERA"
+
+[node name="NewGameButton" type="Button" parent="TitleScreen/SideBar/VBox"]
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "INIZIA NUOVA CARRIERA"
+
+[node name="IntroButton" type="Button" parent="TitleScreen/SideBar/VBox"]
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "INTRODUZIONE & COMANDI"
+
+[node name="SettingsButton" type="Button" parent="TitleScreen/SideBar/VBox"]
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "IMPOSTAZIONI"
+
+[node name="QuitButton" type="Button" parent="TitleScreen/SideBar/VBox"]
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "ESCI DAL GIOCO"
+
+[node name="SpacerBottom" type="Control" parent="TitleScreen/SideBar/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="FooterHint" type="Label" parent="TitleScreen/SideBar/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.62, 0.72, 1)
+theme_override_font_sizes/font_size = 12
+text = "Suggerimento: abbatti i pilastri portanti a terra per scatenare crolli a catena."
+autowrap_mode = 3
+
+[node name="PauseOverlay" type="Control" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Dimmer" type="ColorRect" parent="PauseOverlay"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.02, 0.025, 0.04, 0.72)
+
+[node name="PausePanel" type="PanelContainer" parent="PauseOverlay"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -210.0
+offset_top = -205.0
+offset_right = 210.0
+offset_bottom = 205.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("Style_Modal")
+
+[node name="VBox" type="VBoxContainer" parent="PauseOverlay/PausePanel"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="PauseTitle" type="Label" parent="PauseOverlay/PausePanel/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.98, 0.76, 0.22, 1)
+theme_override_font_sizes/font_size = 24
+text = "CANTIERE IN PAUSA"
+horizontal_alignment = 1
+
+[node name="ResumeButton" type="Button" parent="PauseOverlay/PausePanel/VBox"]
+custom_minimum_size = Vector2(0, 46)
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "RIPRENDI DEMOLIZIONE"
+
+[node name="PauseSkillsButton" type="Button" parent="PauseOverlay/PausePanel/VBox"]
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+text = "ALBERO DELLE ABILITÀ  [K]"
+
+[node name="PauseSettingsButton" type="Button" parent="PauseOverlay/PausePanel/VBox"]
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+text = "IMPOSTAZIONI"
+
+[node name="PauseIntroButton" type="Button" parent="PauseOverlay/PausePanel/VBox"]
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+text = "MANUALE & COMANDI"
+
+[node name="BackToTitleButton" type="Button" parent="PauseOverlay/PausePanel/VBox"]
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+text = "TORNA AL MENU INIZIALE"
+
+[node name="IntroOverlay" type="Control" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Dimmer" type="ColorRect" parent="IntroOverlay"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.015, 0.02, 0.032, 0.84)
+
+[node name="IntroPanel" type="PanelContainer" parent="IntroOverlay"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -350.0
+offset_top = -225.0
+offset_right = 350.0
+offset_bottom = 225.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("Style_Modal")
+
+[node name="VBox" type="VBoxContainer" parent="IntroOverlay/IntroPanel"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="StepIndicator" type="Label" parent="IntroOverlay/IntroPanel/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.42, 0.80, 1, 1)
+theme_override_font_sizes/font_size = 12
+text = "BRIEFING DI CANTIERE  •  SCHEDA 1 / 3"
+
+[node name="IntroTitle" type="Label" parent="IntroOverlay/IntroPanel/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.98, 0.76, 0.22, 1)
+theme_override_font_sizes/font_size = 24
+text = "Benvenuto in Make It Flat"
+
+[node name="IntroBody" type="Label" parent="IntroOverlay/IntroPanel/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_colors/font_color = Color(0.86, 0.90, 0.95, 1)
+theme_override_font_sizes/font_size = 15
+text = "Contenuto briefing"
+autowrap_mode = 3
+
+[node name="ButtonsRow" type="HBoxContainer" parent="IntroOverlay/IntroPanel/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="PrevStepButton" type="Button" parent="IntroOverlay/IntroPanel/VBox/ButtonsRow"]
+custom_minimum_size = Vector2(120, 42)
+layout_mode = 2
+text = "← Indietro"
+
+[node name="Spacer" type="Control" parent="IntroOverlay/IntroPanel/VBox/ButtonsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="SkipIntroButton" type="Button" parent="IntroOverlay/IntroPanel/VBox/ButtonsRow"]
+custom_minimum_size = Vector2(120, 42)
+layout_mode = 2
+text = "Chiudi"
+
+[node name="NextStepButton" type="Button" parent="IntroOverlay/IntroPanel/VBox/ButtonsRow"]
+custom_minimum_size = Vector2(170, 42)
+layout_mode = 2
+text = "Avanti →"
