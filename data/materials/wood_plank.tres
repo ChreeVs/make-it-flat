@@ -1,15 +1,22 @@
-[gd_resource type="Resource" script_class="MaterialData" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="MaterialData" load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/resources/MaterialData.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/textures/tex_mat_wood_plank.png" id="2_albedo"]
+[ext_resource type="Texture2D" path="res://assets/textures/tex_mat_wood_plank_n.png" id="3_normal"]
 
 [resource]
 script = ExtResource("1_script")
 material_id = &"wood_plank"
-display_name = "Asse in Legno"
+display_name = "Tavola di Legno"
 hardness_tier = 1
-max_hp = 80.0
-mass_kg = 25.0
-base_money_value = 14.0
+max_hp = 70.0
+mass_kg = 26.0
+base_money_value = 18.0
 is_composite = false
-color = Color(0.65, 0.45, 0.25, 1.0)
-dust_color = Color(0.75, 0.62, 0.45, 1.0)
+color = Color(0.98, 0.96, 0.92, 1.0)
+dust_color = Color(0.68, 0.50, 0.30, 1.0)
+albedo_texture = ExtResource("2_albedo")
+normal_texture = ExtResource("3_normal")
+roughness = 0.78
+metallic = 0.0
+uv_scale = Vector3(1.0, 1.0, 1.0)

@@ -1,46 +1,83 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=13 format=3]
 
 [ext_resource type="Texture2D" path="res://assets/textures/tex_detonator.png" id="1_tex"]
+[ext_resource type="Texture2D" path="res://assets/textures/tex_dark_steel.png" id="2_steel"]
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_body"]
+[sub_resource type="StandardMaterial3D" id="Mat_Body"]
 albedo_texture = ExtResource("1_tex")
-roughness = 0.6
-uv1_scale = Vector3(1, 2, 1)
+roughness = 0.56
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_red_btn"]
-albedo_color = Color(0.9, 0.15, 0.1, 1)
-roughness = 0.3
+[sub_resource type="StandardMaterial3D" id="Mat_RedBtn"]
+albedo_color = Color(0.95, 0.12, 0.08, 1)
+roughness = 0.25
+emission_enabled = true
+emission = Color(0.85, 0.10, 0.05, 1)
+emission_energy_multiplier = 0.45
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_antenna"]
-albedo_color = Color(0.75, 0.75, 0.8, 1)
-metallic = 0.95
-roughness = 0.2
+[sub_resource type="StandardMaterial3D" id="Mat_Chrome"]
+albedo_texture = ExtResource("2_steel")
+metallic = 0.96
+roughness = 0.18
 
-[sub_resource type="BoxMesh" id="BoxMesh_case"]
-size = Vector3(0.12, 0.22, 0.06)
+[sub_resource type="StandardMaterial3D" id="Mat_LCD"]
+shading_mode = 0
+albedo_color = Color(0.22, 0.95, 0.42, 1)
 
-[sub_resource type="CylinderMesh" id="CylinderMesh_btn"]
-top_radius = 0.025
-bottom_radius = 0.025
-height = 0.03
+[sub_resource type="BoxMesh" id="Mesh_Case"]
+size = Vector3(0.115, 0.21, 0.055)
 
-[sub_resource type="CylinderMesh" id="CylinderMesh_antenna"]
-top_radius = 0.005
-bottom_radius = 0.008
-height = 0.26
+[sub_resource type="BoxMesh" id="Mesh_Screen"]
+size = Vector3(0.072, 0.042, 0.008)
+
+[sub_resource type="CylinderMesh" id="Mesh_Bezel"]
+top_radius = 0.030
+bottom_radius = 0.033
+height = 0.016
+radial_segments = 16
+
+[sub_resource type="CylinderMesh" id="Mesh_Btn"]
+top_radius = 0.022
+bottom_radius = 0.024
+height = 0.028
+radial_segments = 16
+
+[sub_resource type="CylinderMesh" id="Mesh_Antenna"]
+top_radius = 0.004
+bottom_radius = 0.007
+height = 0.24
+radial_segments = 8
+
+[sub_resource type="SphereMesh" id="Mesh_Tip"]
+radius = 0.009
+height = 0.018
 
 [node name="RemoteDetonatorModel" type="Node3D"]
 
 [node name="Case" type="MeshInstance3D" parent="."]
-mesh = SubResource("BoxMesh_case")
-surface_material_override/0 = SubResource("StandardMaterial3D_body")
+mesh = SubResource("Mesh_Case")
+surface_material_override/0 = SubResource("Mat_Body")
 
-[node name="Button" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, -4.37114e-08, -1, 0, 1, -4.37114e-08, 0, 0.04, 0.035)
-mesh = SubResource("CylinderMesh_btn")
-surface_material_override/0 = SubResource("StandardMaterial3D_red_btn")
+[node name="StatusLCD" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.055, 0.028)
+mesh = SubResource("Mesh_Screen")
+surface_material_override/0 = SubResource("Mat_LCD")
+
+[node name="ButtonBezel" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, -1, 0, 1, -4.37114e-08, 0, -0.022, 0.030)
+mesh = SubResource("Mesh_Bezel")
+surface_material_override/0 = SubResource("Mat_Chrome")
+
+[node name="FireButton" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, -1, 0, 1, -4.37114e-08, 0, -0.022, 0.040)
+mesh = SubResource("Mesh_Btn")
+surface_material_override/0 = SubResource("Mat_RedBtn")
 
 [node name="Antenna" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.04, 0.22, 0)
-mesh = SubResource("CylinderMesh_antenna")
-surface_material_override/0 = SubResource("StandardMaterial3D_antenna")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.038, 0.215, 0)
+mesh = SubResource("Mesh_Antenna")
+surface_material_override/0 = SubResource("Mat_Chrome")
+
+[node name="AntennaTip" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.038, 0.338, 0)
+mesh = SubResource("Mesh_Tip")
+surface_material_override/0 = SubResource("Mat_RedBtn")

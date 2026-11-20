@@ -1,18 +1,91 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/HUD.gd" id="1_hud"]
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_banner"]
-bg_color = Color(0.12, 0.14, 0.16, 0.9)
+[sub_resource type="StyleBoxFlat" id="StyleBox_Panel"]
+bg_color = Color(0.08, 0.095, 0.12, 0.86)
 border_width_left = 3
-border_width_top = 3
-border_width_right = 3
-border_width_bottom = 3
-border_color = Color(0.95, 0.7, 0.1, 1)
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.95, 0.68, 0.12, 0.95)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+content_margin_left = 14.0
+content_margin_top = 8.0
+content_margin_right = 14.0
+content_margin_bottom = 8.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_CenterPanel"]
+bg_color = Color(0.08, 0.095, 0.12, 0.84)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 2
+border_color = Color(0.32, 0.37, 0.44, 0.9)
 corner_radius_top_left = 8
 corner_radius_top_right = 8
 corner_radius_bottom_right = 8
 corner_radius_bottom_left = 8
+content_margin_left = 16.0
+content_margin_top = 8.0
+content_margin_right = 16.0
+content_margin_bottom = 8.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_ProgBg"]
+bg_color = Color(0.14, 0.16, 0.20, 0.95)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_ProgFill"]
+bg_color = Color(0.95, 0.68, 0.12, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_Banner"]
+bg_color = Color(0.09, 0.13, 0.11, 0.94)
+border_width_left = 3
+border_width_top = 2
+border_width_right = 3
+border_width_bottom = 2
+border_color = Color(0.25, 0.95, 0.45, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+content_margin_left = 18.0
+content_margin_top = 10.0
+content_margin_right = 18.0
+content_margin_bottom = 10.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_Target"]
+bg_color = Color(0.07, 0.085, 0.11, 0.84)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.35, 0.40, 0.48, 0.85)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+content_margin_left = 10.0
+content_margin_top = 6.0
+content_margin_right = 10.0
+content_margin_bottom = 6.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_HpFill"]
+bg_color = Color(0.92, 0.42, 0.18, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
 
 [node name="HUD" type="Control"]
 layout_mode = 3
@@ -26,53 +99,107 @@ script = ExtResource("1_hud")
 
 [node name="TopLeft" type="MarginContainer" parent="."]
 layout_mode = 0
-offset_right = 300.0
-offset_bottom = 80.0
+offset_right = 340.0
+offset_bottom = 130.0
 mouse_filter = 2
-theme_override_constants/margin_left = 20
-theme_override_constants/margin_top = 20
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 16
 
-[node name="MoneyContainer" type="HBoxContainer" parent="TopLeft"]
+[node name="MoneyPanel" type="PanelContainer" parent="TopLeft"]
+layout_mode = 2
+size_flags_vertical = 0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBox_Panel")
+
+[node name="VBox" type="VBoxContainer" parent="TopLeft/MoneyPanel"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 3
+
+[node name="MoneyLabel" type="Label" parent="TopLeft/MoneyPanel/VBox"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.28, 0.96, 0.46, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.65)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 28
+text = "€ 0"
+
+[node name="MetaRow" type="HBoxContainer" parent="TopLeft/MoneyPanel/VBox"]
 layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 10
 
-[node name="MoneyLabel" type="Label" parent="TopLeft/MoneyContainer"]
+[node name="TierLabel" type="Label" parent="TopLeft/MoneyPanel/VBox/MetaRow"]
 layout_mode = 2
 mouse_filter = 2
-theme_override_colors/font_color = Color(0.3, 0.95, 0.4, 1)
-theme_override_font_sizes/font_size = 28
-text = "€ 0"
+theme_override_colors/font_color = Color(0.95, 0.75, 0.25, 1)
+theme_override_font_sizes/font_size = 12
+text = "LICENZA TIER 1"
+
+[node name="PrestigeBadge" type="Label" parent="TopLeft/MoneyPanel/VBox/MetaRow"]
+visible = false
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.45, 0.85, 1, 1)
+theme_override_font_sizes/font_size = 12
+text = "PRESTIGIO x1.0"
+
+[node name="C4Badge" type="Label" parent="TopLeft/MoneyPanel/VBox"]
+visible = false
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(1, 0.35, 0.28, 1)
+theme_override_font_sizes/font_size = 13
+text = "C4 ARMATI: 0  ([7] Detona)"
 
 [node name="TopCenter" type="MarginContainer" parent="."]
 layout_mode = 1
 anchors_preset = 5
 anchor_left = 0.5
 anchor_right = 0.5
-offset_left = -250.0
-offset_right = 250.0
-offset_bottom = 80.0
+offset_left = -270.0
+offset_right = 270.0
+offset_bottom = 96.0
 grow_horizontal = 2
 mouse_filter = 2
-theme_override_constants/margin_top = 15
+theme_override_constants/margin_top = 14
 
-[node name="ProgressContainer" type="VBoxContainer" parent="TopCenter"]
+[node name="ProgressPanel" type="PanelContainer" parent="TopCenter"]
+layout_mode = 2
+size_flags_vertical = 0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBox_CenterPanel")
+
+[node name="ProgressContainer" type="VBoxContainer" parent="TopCenter/ProgressPanel"]
 layout_mode = 2
 mouse_filter = 2
+theme_override_constants/separation = 5
 
-[node name="ProgressBar" type="ProgressBar" parent="TopCenter/ProgressContainer"]
-custom_minimum_size = Vector2(500, 18)
+[node name="ContractTitle" type="Label" parent="TopCenter/ProgressPanel/ProgressContainer"]
 layout_mode = 2
 mouse_filter = 2
+theme_override_colors/font_color = Color(0.95, 0.96, 0.98, 1)
+theme_override_font_sizes/font_size = 15
+text = "Cantiere Attivo"
+horizontal_alignment = 1
+
+[node name="ProgressBar" type="ProgressBar" parent="TopCenter/ProgressPanel/ProgressContainer"]
+custom_minimum_size = Vector2(480, 16)
+layout_mode = 2
+mouse_filter = 2
+theme_override_styles/background = SubResource("StyleBox_ProgBg")
+theme_override_styles/fill = SubResource("StyleBox_ProgFill")
 max_value = 100.0
 show_percentage = false
 
-[node name="ProgressLabel" type="Label" parent="TopCenter/ProgressContainer"]
+[node name="ProgressLabel" type="Label" parent="TopCenter/ProgressPanel/ProgressContainer"]
 layout_mode = 2
 mouse_filter = 2
-theme_override_colors/font_color = Color(0.9, 0.9, 0.9, 1)
-theme_override_font_sizes/font_size = 14
-text = "Demolizione: 0.0% (0 / 0 kg)"
+theme_override_colors/font_color = Color(0.76, 0.80, 0.86, 1)
+theme_override_font_sizes/font_size = 12
+text = "Demolizione: 0.0% (0 / 0 kg) • Soglia 88%"
 horizontal_alignment = 1
 
 [node name="TopNotification" type="MarginContainer" parent="."]
@@ -80,10 +207,10 @@ layout_mode = 1
 anchors_preset = 5
 anchor_left = 0.5
 anchor_right = 0.5
-offset_left = -300.0
-offset_top = 85.0
-offset_right = 300.0
-offset_bottom = 125.0
+offset_left = -360.0
+offset_top = 104.0
+offset_right = 360.0
+offset_bottom = 144.0
 grow_horizontal = 2
 mouse_filter = 2
 
@@ -91,8 +218,11 @@ mouse_filter = 2
 layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.85)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 2
 theme_override_font_sizes/font_size = 18
-text = "Notifica cantiere"
+text = ""
 horizontal_alignment = 1
 
 [node name="CenterNotification" type="CenterContainer" parent="."]
@@ -102,19 +232,19 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -250.0
-offset_top = -120.0
-offset_right = 250.0
-offset_bottom = -60.0
+offset_left = -300.0
+offset_top = -175.0
+offset_right = 300.0
+offset_bottom = -105.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
 [node name="CompletionBanner" type="PanelContainer" parent="CenterNotification"]
-custom_minimum_size = Vector2(500, 60)
+custom_minimum_size = Vector2(540, 56)
 layout_mode = 2
 mouse_filter = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_banner")
+theme_override_styles/panel = SubResource("StyleBox_Banner")
 
 [node name="VBox" type="VBoxContainer" parent="CenterNotification/CompletionBanner"]
 layout_mode = 2
@@ -124,10 +254,91 @@ alignment = 1
 [node name="CompletionText" type="Label" parent="CenterNotification/CompletionBanner/VBox"]
 layout_mode = 2
 mouse_filter = 2
-theme_override_colors/font_color = Color(1, 0.9, 0.2, 1)
-theme_override_font_sizes/font_size = 17
+theme_override_colors/font_color = Color(0.32, 1, 0.52, 1)
+theme_override_font_sizes/font_size = 16
 text = "SOGLIA RAGGIUNTA! Premi [E] per incassare il Bonus"
 horizontal_alignment = 1
+
+[node name="TargetInspector" type="PanelContainer" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -125.0
+offset_top = 28.0
+offset_right = 125.0
+offset_bottom = 90.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBox_Target")
+
+[node name="VBox" type="VBoxContainer" parent="TargetInspector"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 4
+
+[node name="HeaderRow" type="HBoxContainer" parent="TargetInspector/VBox"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="MatName" type="Label" parent="TargetInspector/VBox/HeaderRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.95, 0.95, 0.96, 1)
+theme_override_font_sizes/font_size = 12
+text = "Legno Marcio"
+
+[node name="TierTag" type="Label" parent="TargetInspector/VBox/HeaderRow"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.95, 0.75, 0.25, 1)
+theme_override_font_sizes/font_size = 12
+text = "T1"
+
+[node name="HpBar" type="ProgressBar" parent="TargetInspector/VBox"]
+custom_minimum_size = Vector2(220, 8)
+layout_mode = 2
+mouse_filter = 2
+theme_override_styles/background = SubResource("StyleBox_ProgBg")
+theme_override_styles/fill = SubResource("StyleBox_HpFill")
+max_value = 100.0
+value = 100.0
+show_percentage = false
+
+[node name="WarnLabel" type="Label" parent="TargetInspector/VBox"]
+visible = false
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(1, 0.36, 0.30, 1)
+theme_override_font_sizes/font_size = 11
+text = "SERVE STRUMENTO TIER 2"
+horizontal_alignment = 1
+
+[node name="BottomCenter" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -330.0
+offset_top = -98.0
+offset_right = 330.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+theme_override_constants/margin_bottom = 36
+
+[node name="Hotbar" type="HBoxContainer" parent="BottomCenter"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 6
+alignment = 1
 
 [node name="BottomRight" type="MarginContainer" parent="."]
 layout_mode = 1
@@ -136,32 +347,39 @@ anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -400.0
-offset_top = -100.0
+offset_left = -350.0
+offset_top = -96.0
 grow_horizontal = 0
 grow_vertical = 0
 mouse_filter = 2
-theme_override_constants/margin_right = 20
-theme_override_constants/margin_bottom = 20
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 16
 
-[node name="ToolContainer" type="VBoxContainer" parent="BottomRight"]
+[node name="ToolPanel" type="PanelContainer" parent="BottomRight"]
+layout_mode = 2
+size_flags_vertical = 8
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBox_Panel")
+
+[node name="ToolContainer" type="VBoxContainer" parent="BottomRight/ToolPanel"]
 layout_mode = 2
 mouse_filter = 2
+theme_override_constants/separation = 2
 
-[node name="ToolName" type="Label" parent="BottomRight/ToolContainer"]
+[node name="ToolName" type="Label" parent="BottomRight/ToolPanel/ToolContainer"]
 layout_mode = 2
 mouse_filter = 2
-theme_override_colors/font_color = Color(1, 0.7, 0.2, 1)
-theme_override_font_sizes/font_size = 20
+theme_override_colors/font_color = Color(1, 0.74, 0.18, 1)
+theme_override_font_sizes/font_size = 17
 text = "Piede di Porco"
 horizontal_alignment = 2
 
-[node name="ToolStats" type="Label" parent="BottomRight/ToolContainer"]
+[node name="ToolStats" type="Label" parent="BottomRight/ToolPanel/ToolContainer"]
 layout_mode = 2
 mouse_filter = 2
-theme_override_colors/font_color = Color(0.8, 0.8, 0.8, 1)
-theme_override_font_sizes/font_size = 13
-text = "Danno: 35 | Durezza: T1 | Velocità: 0.35s | Allungo: 3.5m"
+theme_override_colors/font_color = Color(0.78, 0.82, 0.88, 1)
+theme_override_font_sizes/font_size = 12
+text = "Danno: 35 | Durezza: T1 | 0.32s | 3.5m"
 horizontal_alignment = 2
 
 [node name="BottomLeft" type="MarginContainer" parent="."]
@@ -169,40 +387,82 @@ layout_mode = 1
 anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
-offset_top = -60.0
-offset_right = 450.0
+offset_top = -34.0
+offset_right = 760.0
 grow_vertical = 0
 mouse_filter = 2
-theme_override_constants/margin_left = 20
-theme_override_constants/margin_bottom = 15
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_bottom = 10
 
 [node name="ControlsGuide" type="Label" parent="BottomLeft"]
 layout_mode = 2
 mouse_filter = 2
-theme_override_colors/font_color = Color(0.65, 0.65, 0.7, 1)
-theme_override_font_sizes/font_size = 13
-text = "[LMB] Colpisci | [B] Shop Migliorie | [R] Reset Cantiere | [TAB/ESC] Cursore"
+theme_override_colors/font_color = Color(0.74, 0.78, 0.84, 0.9)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.8)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 12
+text = "[LMB] Demolisci  •  [1-7 / Rotella] Attrezzi  •  [B] Officina  •  [C] Commesse  •  [R] Reset  •  [ESC] Cursore"
 
-[node name="Crosshair" type="CenterContainer" parent="."]
+[node name="Crosshair" type="Control" parent="."]
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -10.0
-offset_top = -10.0
-offset_right = 10.0
-offset_bottom = 10.0
+offset_left = -16.0
+offset_top = -16.0
+offset_right = 16.0
+offset_bottom = 16.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
 [node name="Dot" type="ColorRect" parent="Crosshair"]
-custom_minimum_size = Vector2(4, 4)
-layout_mode = 2
+layout_mode = 0
+offset_left = 14.0
+offset_top = 14.0
+offset_right = 18.0
+offset_bottom = 18.0
 mouse_filter = 2
-color = Color(1, 1, 1, 0.85)
+color = Color(1, 1, 1, 0.92)
+
+[node name="TopTick" type="ColorRect" parent="Crosshair"]
+layout_mode = 0
+offset_left = 15.0
+offset_top = 4.0
+offset_right = 17.0
+offset_bottom = 10.0
+mouse_filter = 2
+color = Color(1, 1, 1, 0.72)
+
+[node name="BottomTick" type="ColorRect" parent="Crosshair"]
+layout_mode = 0
+offset_left = 15.0
+offset_top = 22.0
+offset_right = 17.0
+offset_bottom = 28.0
+mouse_filter = 2
+color = Color(1, 1, 1, 0.72)
+
+[node name="LeftTick" type="ColorRect" parent="Crosshair"]
+layout_mode = 0
+offset_left = 4.0
+offset_top = 15.0
+offset_right = 10.0
+offset_bottom = 17.0
+mouse_filter = 2
+color = Color(1, 1, 1, 0.72)
+
+[node name="RightTick" type="ColorRect" parent="Crosshair"]
+layout_mode = 0
+offset_left = 22.0
+offset_top = 15.0
+offset_right = 28.0
+offset_bottom = 17.0
+mouse_filter = 2
+color = Color(1, 1, 1, 0.72)
 
 [node name="FloatingTextLayer" type="Control" parent="."]
 layout_mode = 1

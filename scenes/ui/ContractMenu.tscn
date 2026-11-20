@@ -1,18 +1,30 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/ContractMenu.gd" id="1_contracts"]
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
-bg_color = Color(0.1, 0.12, 0.14, 0.96)
+[sub_resource type="StyleBoxFlat" id="StyleBox_Panel"]
+bg_color = Color(0.085, 0.10, 0.13, 0.97)
 border_width_left = 2
-border_width_top = 2
+border_width_top = 4
 border_width_right = 2
 border_width_bottom = 2
-border_color = Color(0.2, 0.6, 0.95, 1)
+border_color = Color(0.24, 0.68, 0.98, 1)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
 corner_radius_bottom_left = 10
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_CloseBtn"]
+bg_color = Color(0.22, 0.12, 0.12, 0.95)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.85, 0.30, 0.25, 0.9)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
 
 [node name="ContractMenu" type="Control"]
 visible = false
@@ -31,7 +43,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0, 0, 0, 0.5)
+color = Color(0.02, 0.03, 0.04, 0.65)
 
 [node name="Panel" type="PanelContainer" parent="."]
 layout_mode = 1
@@ -40,20 +52,20 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -360.0
-offset_top = -240.0
-offset_right = 360.0
-offset_bottom = 240.0
+offset_left = -430.0
+offset_top = -290.0
+offset_right = 430.0
+offset_bottom = 290.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+theme_override_styles/panel = SubResource("StyleBox_Panel")
 
 [node name="Margin" type="MarginContainer" parent="Panel"]
 layout_mode = 2
 theme_override_constants/margin_left = 24
-theme_override_constants/margin_top = 20
+theme_override_constants/margin_top = 18
 theme_override_constants/margin_right = 24
-theme_override_constants/margin_bottom = 20
+theme_override_constants/margin_bottom = 18
 
 [node name="VBox" type="VBoxContainer" parent="Panel/Margin"]
 layout_mode = 2
@@ -61,21 +73,29 @@ theme_override_constants/separation = 12
 
 [node name="Header" type="HBoxContainer" parent="Panel/Margin/VBox"]
 layout_mode = 2
+theme_override_constants/separation = 12
 
 [node name="Title" type="Label" parent="Panel/Margin/VBox/Header"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.2, 0.7, 1, 1)
+theme_override_colors/font_color = Color(0.32, 0.78, 1, 1)
 theme_override_font_sizes/font_size = 22
-text = "COMMESSE E CANTIERI DISPONIBILI"
+text = "BACHECA COMMESSE & CANTIERI"
 
 [node name="Spacer" type="Control" parent="Panel/Margin/VBox/Header"]
 layout_mode = 2
 size_flags_horizontal = 3
 
+[node name="ProgressSummary" type="Label" parent="Panel/Margin/VBox/Header"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.90, 0.96, 1)
+theme_override_font_sizes/font_size = 14
+text = "Licenza: Tier 1  •  Completati: 0 / 7"
+
 [node name="CloseButton" type="Button" parent="Panel/Margin/VBox/Header"]
 custom_minimum_size = Vector2(36, 36)
 layout_mode = 2
-text = "X"
+theme_override_styles/normal = SubResource("StyleBox_CloseBtn")
+text = "✕"
 
 [node name="HSeparator" type="HSeparator" parent="Panel/Margin/VBox"]
 layout_mode = 2
@@ -83,6 +103,7 @@ layout_mode = 2
 [node name="Scroll" type="ScrollContainer" parent="Panel/Margin/VBox"]
 layout_mode = 2
 size_flags_vertical = 3
+horizontal_scroll_mode = 0
 
 [node name="ContractsList" type="VBoxContainer" parent="Panel/Margin/VBox/Scroll"]
 layout_mode = 2

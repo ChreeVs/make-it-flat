@@ -1,179 +1,167 @@
 class_name StructureManager
 extends Node3D
 
-signal structure_completed()
-signal progress_updated(ratio: float)
-
-@export var block_size: float = 0.5
-@export var ground_tolerance: float = 0.35
-@export var completion_threshold: float = 0.88
+@export var block_size: float = 1.0
 
 var all_blocks: Array[DestructibleBlock] = []
-var active_intact_blocks: Dictionary = {} # DestructibleBlock -> bool
+var active_intact_blocks: Array[DestructibleBlock] = []
 var grid_map: Dictionary = {} # Vector3i -> DestructibleBlock
-var neighbors_map: Dictionary = {} # DestructibleBlock -> Array[DestructibleBlock]
 var anchored_blocks: Array[DestructibleBlock] = []
 
 var total_initial_mass: float = 0.0
 var destroyed_mass: float = 0.0
-var is_completed: bool = false
-var outline_enabled: bool = false
+var threshold_reached: bool = false
+var xray_active: bool = false
+
+var _counted_block_ids: Dictionary = {} # instance_id -> true
+var _bfs_scheduled: bool = false
+
+const DIRECTIONS: Array[Vector3i] = [
+	Vector3i(1, 0, 0),
+	Vector3i(-1, 0, 0),
+	Vector3i(0, 1, 0),
+	Vector3i(0, -1, 0),
+	Vector3i(0, 0, 1),
+	Vector3i(0, 0, -1)
+]
 
 func _ready() -> void:
-	build_structure_graph()
+	_index_structure()
+	EventBus.block_destroyed.connect(_on_block_destroyed)
+	_emit_progress()
 
-func build_structure_graph() -> void:
+func _index_structure() -> void:
 	all_blocks.clear()
 	active_intact_blocks.clear()
 	grid_map.clear()
-	neighbors_map.clear()
 	anchored_blocks.clear()
+	_counted_block_ids.clear()
 	total_initial_mass = 0.0
 	destroyed_mass = 0.0
-	is_completed = false
-	outline_enabled = false
+	threshold_reached = false
+	xray_active = false
 
-	# 1. Trova tutti i DestructibleBlock figli
-	_collect_blocks(self)
+	for child in get_children():
+		if child is DestructibleBlock:
+			var b := child as DestructibleBlock
+			all_blocks.append(b)
+			active_intact_blocks.append(b)
+			grid_map[b.grid_coord] = b
+			total_initial_mass += b.mass
+			if b.is_anchored:
+				anchored_blocks.append(b)
 
-	# 2. Registra posizioni e ancoraggi
-	for block in all_blocks:
-		total_initial_mass += block.mass
-		active_intact_blocks[block] = true
-		
-		# Calcola coordinata griglia deterministica per ogni blocco
-		var local_pos: Vector3 = to_local(block.global_position)
-		var gx: int = int(round(local_pos.x / block_size))
-		var gy: int = int(round((local_pos.y - 0.5 * block_size) / block_size))
-		var gz: int = int(round(local_pos.z / block_size))
-		var coord := Vector3i(gx, gy, gz)
-		block.grid_coord = coord
+	if total_initial_mass <= 0.0:
+		total_initial_mass = 1.0
 
-		grid_map[coord] = block
-		var n_arr: Array[DestructibleBlock] = []
-		neighbors_map[block] = n_arr
-
-		# Determina se è ancorato a terra
-		if block.is_anchored or block.global_position.y <= ground_tolerance:
-			block.is_anchored = true
-			anchored_blocks.append(block)
-
-		# Connetti segnale distruzione
-		block.block_destroyed.connect(_on_block_destroyed.bind(block))
-
-	# 3. Costruisci le adiacenze (6 direzioni adiacenti ortogonali)
-	var directions: Array[Vector3i] = [
-		Vector3i(1, 0, 0), Vector3i(-1, 0, 0),
-		Vector3i(0, 1, 0), Vector3i(0, -1, 0),
-		Vector3i(0, 0, 1), Vector3i(0, 0, -1)
-	]
-
-	for coord in grid_map.keys():
-		var block: DestructibleBlock = grid_map[coord]
-		var block_neighbors: Array[DestructibleBlock] = neighbors_map[block]
-
-		for d in directions:
-			var n_coord: Vector3i = coord + d
-			if grid_map.has(n_coord):
-				var neighbor: DestructibleBlock = grid_map[n_coord]
-				if not block_neighbors.has(neighbor):
-					block_neighbors.append(neighbor)
-
-	EventBus.contract_progress_updated.emit(0.0, 0.0, total_initial_mass)
-
-func _collect_blocks(node: Node) -> void:
-	if node is DestructibleBlock:
-		all_blocks.append(node)
-	for child in node.get_children():
-		_collect_blocks(child)
-
-func _on_block_destroyed(by_gravity: bool, block: DestructibleBlock) -> void:
-	if not active_intact_blocks.has(block):
+func _on_block_destroyed(block: Node3D, _by_gravity: bool) -> void:
+	if not (block is DestructibleBlock):
+		return
+	var db := block as DestructibleBlock
+	if db.get_parent() != self:
 		return
 
-	active_intact_blocks.erase(block)
-	anchored_blocks.erase(block)
-	grid_map.erase(block.grid_coord)
+	var coord: Vector3i = db.grid_coord
+	if grid_map.get(coord) == db:
+		grid_map.erase(coord)
 
-	destroyed_mass += block.mass
-	_update_progress()
+	active_intact_blocks.erase(db)
+	if db.is_anchored:
+		anchored_blocks.erase(db)
 
-	# Disconnetti dai vicini
-	if neighbors_map.has(block):
-		var n_list: Array[DestructibleBlock] = neighbors_map[block]
-		for n in n_list:
-			if neighbors_map.has(n):
-				var neighbor_neighbors: Array[DestructibleBlock] = neighbors_map[n]
-				neighbor_neighbors.erase(block)
-		neighbors_map.erase(block)
+	var bid: int = db.get_instance_id()
+	if not _counted_block_ids.has(bid):
+		_counted_block_ids[bid] = true
+		destroyed_mass += db.mass
 
-	call_deferred("_evaluate_structural_integrity")
+	_schedule_bfs()
+	_emit_progress()
 
-func _evaluate_structural_integrity() -> void:
-	# BFS Multi-Sorgente partendo da tutti i blocchi ancorati ancora intatti
-	var visited: Dictionary = {}
-	var queue: Array[DestructibleBlock] = []
+func _schedule_bfs() -> void:
+	if _bfs_scheduled:
+		return
+	_bfs_scheduled = true
+	call_deferred("_run_structural_bfs")
+
+func _run_structural_bfs() -> void:
+	_bfs_scheduled = false
+	if active_intact_blocks.is_empty():
+		_emit_progress()
+		return
+
+	# BFS O(V+E) con cursore a indice (evita O(N^2) di Array.pop_front)
+	var visited: Dictionary = {} # Vector3i -> true
+	var queue: Array[Vector3i] = []
 
 	for anchor in anchored_blocks:
-		if is_instance_valid(anchor) and active_intact_blocks.has(anchor):
-			visited[anchor] = true
-			queue.append(anchor)
+		if is_instance_valid(anchor) and not anchor.is_destroyed and anchor.freeze:
+			var c: Vector3i = anchor.grid_coord
+			if grid_map.has(c) and not visited.has(c):
+				visited[c] = true
+				queue.append(c)
 
-	while not queue.is_empty():
-		var curr: DestructibleBlock = queue.pop_front()
-		if not neighbors_map.has(curr):
-			continue
-		
-		var neighbors: Array[DestructibleBlock] = neighbors_map[curr]
-		for neighbor in neighbors:
-			if is_instance_valid(neighbor) and active_intact_blocks.has(neighbor):
-				if not visited.has(neighbor):
-					visited[neighbor] = true
-					queue.append(neighbor)
+	var head: int = 0
+	while head < queue.size():
+		var curr: Vector3i = queue[head]
+		head += 1
+		for dir in DIRECTIONS:
+			var nxt: Vector3i = curr + dir
+			if not visited.has(nxt) and grid_map.has(nxt):
+				var nb: DestructibleBlock = grid_map[nxt]
+				if is_instance_valid(nb) and not nb.is_destroyed and nb.freeze:
+					visited[nxt] = true
+					queue.append(nxt)
 
 	var disconnected: Array[DestructibleBlock] = []
-	var fallen_mass: float = 0.0
+	var collapsed_mass: float = 0.0
 
-	for block in active_intact_blocks.keys():
-		if not is_instance_valid(block):
-			continue
-		if not visited.has(block):
-			disconnected.append(block)
+	var i: int = active_intact_blocks.size() - 1
+	while i >= 0:
+		var b: DestructibleBlock = active_intact_blocks[i]
+		if not is_instance_valid(b) or b.is_destroyed:
+			active_intact_blocks.remove_at(i)
+		elif not visited.has(b.grid_coord):
+			active_intact_blocks.remove_at(i)
+			grid_map.erase(b.grid_coord)
+			disconnected.append(b)
+			var bid: int = b.get_instance_id()
+			if not _counted_block_ids.has(bid):
+				_counted_block_ids[bid] = true
+				destroyed_mass += b.mass
+			collapsed_mass += b.mass
+		i -= 1
 
-	if disconnected.is_empty():
-		return
+	if not disconnected.is_empty():
+		for b in disconnected:
+			b.activate_dynamic_debris(Vector3(0.0, -1.2, 0.0))
+		EventBus.chain_collapse_triggered.emit(disconnected.size(), collapsed_mass)
 
-	for block in disconnected:
-		active_intact_blocks.erase(block)
-		anchored_blocks.erase(block)
-		grid_map.erase(block.grid_coord)
-		neighbors_map.erase(block)
+		if disconnected.size() >= 6:
+			EventBus.show_notification.emit(
+				"CROLLO A CATENA! %d blocchi (%.0f kg)" % [disconnected.size(), collapsed_mass],
+				Color(1.0, 0.72, 0.18)
+			)
 
-		fallen_mass += block.mass
-		destroyed_mass += block.mass
-		block.unfreeze_block()
+	_emit_progress()
 
-	_update_progress()
-
-	EventBus.chain_collapse_triggered.emit(disconnected.size(), fallen_mass)
-	var shake_strength: float = clamp(fallen_mass * 0.003, 0.2, 0.8)
-	EventBus.request_camera_shake.emit(shake_strength)
-
-func _update_progress() -> void:
-	if total_initial_mass <= 0.0:
-		return
-
-	var ratio: float = clamp(destroyed_mass / total_initial_mass, 0.0, 1.0)
-	progress_updated.emit(ratio)
+func _emit_progress() -> void:
+	var ratio: float = clampf(destroyed_mass / maxf(total_initial_mass, 1.0), 0.0, 1.0)
 	EventBus.contract_progress_updated.emit(ratio, destroyed_mass, total_initial_mass)
 
-	if (1.0 - ratio) <= 0.15 and not outline_enabled:
-		outline_enabled = true
-		for block in active_intact_blocks.keys():
-			if is_instance_valid(block):
-				block.set_highlight_outline(true)
+	var threshold: float = GameManager.current_contract.completion_threshold if GameManager.current_contract else 0.88
+	if not threshold_reached and ratio >= threshold:
+		threshold_reached = true
+		_enable_xray_on_remaining()
+		EventBus.contract_threshold_reached.emit(GameManager.current_contract)
 
-	if ratio >= completion_threshold and not is_completed:
-		is_completed = true
-		structure_completed.emit()
+	# Auto-completa solo quando la struttura è praticamente rasa al suolo al 100%
+	if ratio >= 0.995 and GameManager.current_contract and not GameManager.contract_bonus_claimed:
 		GameManager.complete_current_contract()
+
+func _enable_xray_on_remaining() -> void:
+	if xray_active:
+		return
+	xray_active = true
+	for b in active_intact_blocks:
+		if is_instance_valid(b) and not b.is_destroyed and b.freeze:
+			b.set_xray_highlight(true)

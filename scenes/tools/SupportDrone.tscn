@@ -1,28 +1,107 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=13 format=3]
 
 [ext_resource type="Script" path="res://scripts/SupportDrone.gd" id="1_drone"]
+[ext_resource type="Texture2D" path="res://assets/textures/tex_hazard_stripes.png" id="2_hazard"]
+[ext_resource type="Texture2D" path="res://assets/textures/tex_dark_steel.png" id="3_steel"]
 
-[sub_resource type="SphereMesh" id="SphereMesh_drone"]
-radius = 0.4
-height = 0.5
+[sub_resource type="StandardMaterial3D" id="Mat_Chassis"]
+albedo_texture = ExtResource("3_steel")
+metallic = 0.88
+roughness = 0.28
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_drone"]
-albedo_color = Color(0.2, 0.5, 0.9, 1)
-metallic = 0.9
-roughness = 0.2
+[sub_resource type="StandardMaterial3D" id="Mat_Trim"]
+albedo_texture = ExtResource("2_hazard")
+roughness = 0.45
 
-[sub_resource type="CylinderMesh" id="CylinderMesh_laser"]
-top_radius = 0.04
-bottom_radius = 0.04
+[sub_resource type="StandardMaterial3D" id="Mat_CyanGlow"]
+shading_mode = 0
+albedo_color = Color(0.18, 0.92, 1.0, 1)
+
+[sub_resource type="CylinderMesh" id="Mesh_Core"]
+top_radius = 0.42
+bottom_radius = 0.34
+height = 0.26
+radial_segments = 8
+
+[sub_resource type="CylinderMesh" id="Mesh_Ring"]
+top_radius = 0.46
+bottom_radius = 0.46
+height = 0.07
+radial_segments = 8
+
+[sub_resource type="BoxMesh" id="Mesh_Arm"]
+size = Vector3(1.55, 0.055, 0.075)
+
+[sub_resource type="CylinderMesh" id="Mesh_Rotor"]
+top_radius = 0.28
+bottom_radius = 0.28
+height = 0.02
+radial_segments = 16
+
+[sub_resource type="SphereMesh" id="Mesh_Lens"]
+radius = 0.14
+height = 0.22
+
+[sub_resource type="CylinderMesh" id="Mesh_Laser"]
+top_radius = 0.045
+bottom_radius = 0.045
 height = 1.0
 
 [node name="SupportDrone" type="Node3D" groups=["support_drone"]]
 script = ExtResource("1_drone")
 
-[node name="DroneBody" type="MeshInstance3D" parent="."]
-mesh = SubResource("SphereMesh_drone")
-surface_material_override/0 = SubResource("StandardMaterial3D_drone")
+[node name="DroneBody" type="Node3D" parent="."]
+
+[node name="CoreChassis" type="MeshInstance3D" parent="DroneBody"]
+mesh = SubResource("Mesh_Core")
+surface_material_override/0 = SubResource("Mat_Chassis")
+
+[node name="HazardRing" type="MeshInstance3D" parent="DroneBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.02, 0)
+mesh = SubResource("Mesh_Ring")
+surface_material_override/0 = SubResource("Mat_Trim")
+
+[node name="ArmA" type="MeshInstance3D" parent="DroneBody"]
+transform = Transform3D(0.707107, 0, 0.707107, 0, 1, 0, -0.707107, 0, 0.707107, 0, 0.04, 0)
+mesh = SubResource("Mesh_Arm")
+surface_material_override/0 = SubResource("Mat_Chassis")
+
+[node name="ArmB" type="MeshInstance3D" parent="DroneBody"]
+transform = Transform3D(0.707107, 0, -0.707107, 0, 1, 0, 0.707107, 0, 0.707107, 0, 0.04, 0)
+mesh = SubResource("Mesh_Arm")
+surface_material_override/0 = SubResource("Mat_Chassis")
+
+[node name="RotorFL" type="MeshInstance3D" parent="DroneBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.54, 0.10, -0.54)
+mesh = SubResource("Mesh_Rotor")
+surface_material_override/0 = SubResource("Mat_CyanGlow")
+
+[node name="RotorFR" type="MeshInstance3D" parent="DroneBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.54, 0.10, -0.54)
+mesh = SubResource("Mesh_Rotor")
+surface_material_override/0 = SubResource("Mat_CyanGlow")
+
+[node name="RotorBL" type="MeshInstance3D" parent="DroneBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.54, 0.10, 0.54)
+mesh = SubResource("Mesh_Rotor")
+surface_material_override/0 = SubResource("Mat_CyanGlow")
+
+[node name="RotorBR" type="MeshInstance3D" parent="DroneBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.54, 0.10, 0.54)
+mesh = SubResource("Mesh_Rotor")
+surface_material_override/0 = SubResource("Mat_CyanGlow")
+
+[node name="LaserTurret" type="MeshInstance3D" parent="DroneBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.16, 0)
+mesh = SubResource("Mesh_Lens")
+surface_material_override/0 = SubResource("Mat_CyanGlow")
+
+[node name="DroneLight" type="OmniLight3D" parent="DroneBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.32, 0)
+light_color = Color(0.2, 0.9, 1, 1)
+light_energy = 1.8
+omni_range = 8.0
 
 [node name="LaserBeam" type="MeshInstance3D" parent="."]
 visible = false
-mesh = SubResource("CylinderMesh_laser")
+mesh = SubResource("Mesh_Laser")

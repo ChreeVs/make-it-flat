@@ -1,40 +1,72 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=11 format=3]
 
-[ext_resource type="Texture2D" path="res://assets/textures/tex_painted_metal.png" id="1_tex"]
+[ext_resource type="Texture2D" path="res://assets/textures/tex_painted_metal.png" id="1_paint"]
+[ext_resource type="Texture2D" path="res://assets/textures/tex_dark_steel.png" id="2_steel"]
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_crowbar"]
-albedo_texture = ExtResource("1_tex")
-metallic = 0.8
-roughness = 0.35
-uv1_scale = Vector3(2, 4, 1)
+[sub_resource type="StandardMaterial3D" id="Mat_Paint"]
+albedo_texture = ExtResource("1_paint")
+metallic = 0.65
+roughness = 0.38
+uv1_scale = Vector3(1, 5, 1)
 
-[sub_resource type="BoxMesh" id="BoxMesh_shaft"]
-size = Vector3(0.045, 0.045, 0.6)
+[sub_resource type="StandardMaterial3D" id="Mat_Steel"]
+albedo_texture = ExtResource("2_steel")
+metallic = 0.92
+roughness = 0.28
 
-[sub_resource type="BoxMesh" id="BoxMesh_hook1"]
-size = Vector3(0.042, 0.042, 0.12)
+[sub_resource type="StandardMaterial3D" id="Mat_Grip"]
+albedo_color = Color(0.11, 0.12, 0.13, 1)
+roughness = 0.92
 
-[sub_resource type="BoxMesh" id="BoxMesh_hook2"]
-size = Vector3(0.05, 0.015, 0.08)
+[sub_resource type="CylinderMesh" id="Mesh_Shaft"]
+top_radius = 0.019
+bottom_radius = 0.019
+height = 0.56
+radial_segments = 6
+
+[sub_resource type="CylinderMesh" id="Mesh_Grip"]
+top_radius = 0.024
+bottom_radius = 0.025
+height = 0.18
+radial_segments = 8
+
+[sub_resource type="BoxMesh" id="Mesh_Neck"]
+size = Vector3(0.032, 0.032, 0.11)
+
+[sub_resource type="BoxMesh" id="Mesh_Claw"]
+size = Vector3(0.014, 0.014, 0.095)
+
+[sub_resource type="BoxMesh" id="Mesh_Chisel"]
+size = Vector3(0.044, 0.012, 0.09)
 
 [node name="CrowbarModel" type="Node3D"]
 
 [node name="Shaft" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.15)
-mesh = SubResource("BoxMesh_shaft")
-surface_material_override/0 = SubResource("StandardMaterial3D_crowbar")
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, -1, 0, 1, -4.37114e-08, 0, 0, -0.14)
+mesh = SubResource("Mesh_Shaft")
+surface_material_override/0 = SubResource("Mat_Paint")
 
-[node name="Hook_Bend" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.707107, -0.707107, 0, 0.707107, 0.707107, 0, 0.045, -0.48)
-mesh = SubResource("BoxMesh_hook1")
-surface_material_override/0 = SubResource("StandardMaterial3D_crowbar")
+[node name="RubberGrip" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, -1, 0, 1, -4.37114e-08, 0, 0, 0.02)
+mesh = SubResource("Mesh_Grip")
+surface_material_override/0 = SubResource("Mat_Grip")
 
-[node name="Hook_Claw" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.173648, -0.984808, 0, 0.984808, 0.173648, 0, 0.1, -0.52)
-mesh = SubResource("BoxMesh_hook2")
-surface_material_override/0 = SubResource("StandardMaterial3D_crowbar")
+[node name="HookBend" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.707107, -0.707107, 0, 0.707107, 0.707107, 0, 0.038, -0.45)
+mesh = SubResource("Mesh_Neck")
+surface_material_override/0 = SubResource("Mat_Paint")
 
-[node name="Chisel_End" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.16)
-mesh = SubResource("BoxMesh_hook2")
-surface_material_override/0 = SubResource("StandardMaterial3D_crowbar")
+[node name="ClawLeft" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.173648, -0.984808, 0, 0.984808, 0.173648, -0.014, 0.095, -0.495)
+mesh = SubResource("Mesh_Claw")
+surface_material_override/0 = SubResource("Mat_Steel")
+
+[node name="ClawRight" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.173648, -0.984808, 0, 0.984808, 0.173648, 0.014, 0.095, -0.495)
+mesh = SubResource("Mesh_Claw")
+surface_material_override/0 = SubResource("Mat_Steel")
+
+[node name="RearChisel" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.965926, 0.258819, 0, -0.258819, 0.965926, 0, -0.012, 0.16)
+mesh = SubResource("Mesh_Chisel")
+surface_material_override/0 = SubResource("Mat_Steel")

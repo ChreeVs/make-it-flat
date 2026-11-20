@@ -1,29 +1,62 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://scripts/ExplosiveCharge.gd" id="1_c4"]
+[ext_resource type="Texture2D" path="res://assets/textures/tex_c4_block.png" id="2_tex"]
+[ext_resource type="Texture2D" path="res://assets/textures/tex_dark_steel.png" id="3_steel"]
 
-[sub_resource type="BoxMesh" id="BoxMesh_c4"]
-size = Vector3(0.3, 0.15, 0.15)
+[sub_resource type="StandardMaterial3D" id="Mat_C4"]
+albedo_texture = ExtResource("2_tex")
+roughness = 0.72
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_c4"]
-albedo_color = Color(0.2, 0.25, 0.2, 1)
-roughness = 0.7
+[sub_resource type="StandardMaterial3D" id="Mat_Steel"]
+albedo_texture = ExtResource("3_steel")
+metallic = 0.85
+roughness = 0.32
 
-[sub_resource type="BoxShape3D" id="BoxShape3D_c4"]
-size = Vector3(0.3, 0.15, 0.15)
+[sub_resource type="StandardMaterial3D" id="Mat_RedLED"]
+shading_mode = 0
+albedo_color = Color(1.0, 0.12, 0.08, 1)
+
+[sub_resource type="BoxMesh" id="Mesh_Brick"]
+size = Vector3(0.28, 0.14, 0.13)
+
+[sub_resource type="BoxMesh" id="Mesh_Receiver"]
+size = Vector3(0.12, 0.04, 0.08)
+
+[sub_resource type="SphereMesh" id="Mesh_LED"]
+radius = 0.016
+height = 0.032
+
+[sub_resource type="CylinderMesh" id="Mesh_Antenna"]
+top_radius = 0.004
+bottom_radius = 0.006
+height = 0.18
+radial_segments = 8
 
 [node name="ExplosiveCharge" type="Node3D" groups=["explosive_charge"]]
 script = ExtResource("1_c4")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]
-mesh = SubResource("BoxMesh_c4")
-surface_material_override/0 = SubResource("StandardMaterial3D_c4")
+mesh = SubResource("Mesh_Brick")
+surface_material_override/0 = SubResource("Mat_C4")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
-shape = SubResource("BoxShape3D_c4")
+[node name="ReceiverBox" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.075)
+mesh = SubResource("Mesh_Receiver")
+surface_material_override/0 = SubResource("Mat_Steel")
+
+[node name="LedBulb" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.035, 0.01, 0.118)
+mesh = SubResource("Mesh_LED")
+surface_material_override/0 = SubResource("Mat_RedLED")
+
+[node name="Antenna" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.07, 0.12, 0.02)
+mesh = SubResource("Mesh_Antenna")
+surface_material_override/0 = SubResource("Mat_Steel")
 
 [node name="OmniLight3D" type="OmniLight3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0)
-light_color = Color(1, 0.15, 0.1, 1)
-light_energy = 0.0
-omni_range = 1.5
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.035, 0.01, 0.15)
+light_color = Color(1, 0.12, 0.08, 1)
+light_energy = 1.6
+omni_range = 2.0

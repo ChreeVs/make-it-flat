@@ -1,78 +1,110 @@
 class_name ExplosiveCharge
 extends Node3D
 
-@export var explosion_radius: float = 3.5
-@export var explosion_damage: float = 900.0
-@export var explosion_impulse: float = 1200.0
+@export var blast_radius: float = 3.8
+@export var base_blast_damage: float = 950.0
+@export var blast_penetration: int = 4
 
-@onready var mesh: MeshInstance3D = $MeshInstance3D
+var _detonated: bool = false
+var _blink_time: float = 0.0
+
 @onready var led_light: OmniLight3D = $OmniLight3D
 
-var is_detonated: bool = false
-var target_block: DestructibleBlock
-
-func _ready() -> void:
-	# Bip/flash intermittente del LED rosso
-	if led_light:
-		var tween: Tween = create_tween().set_loops()
-		tween.tween_property(led_light, "light_energy", 1.5, 0.2)
-		tween.tween_property(led_light, "light_energy", 0.0, 0.2)
+func _process(delta: float) -> void:
+	if _detonated:
+		return
+	_blink_time += delta
+	if is_instance_valid(led_light):
+		var pulse: float = 0.5 + 0.5 * sin(_blink_time * 10.0)
+		led_light.light_energy = lerpf(0.25, 2.2, pulse)
 
 func detonate() -> void:
-	if is_detonated:
+	if _detonated:
 		return
-	is_detonated = true
+	_detonated = true
 
-	# Scossa camera violenta
-	EventBus.request_camera_shake.emit(0.65)
-	EventBus.request_hitstop.emit(0.04)
+	var origin: Vector3 = global_position
+	var dmg_mult: float = EconomyManager.get_upgrade_total_multiplier(&"tool_damage")
+	var total_dmg: float = base_blast_damage * dmg_mult
 
-	# Query fisica per blocchi nel raggio dell'onda d'urto
-	var space_state := get_world_3d().direct_space_state
-	var shape := SphereShape3D.new()
-	shape.radius = explosion_radius
+	# Genera VFX su current_scene PRIMA di distruggere il blocco padre
+	_spawn_explosion_vfx(origin)
+	EventBus.explosion_triggered.emit(origin, blast_radius)
 
-	var query := PhysicsShapeQueryParameters3D.new()
-	query.shape = shape
-	query.transform = Transform3D(Basis(), global_position)
-	query.collision_mask = 4 | 8 # Layer 3: Structure_Intact (4) e Layer 4: Debris_Large (8)
+	# Danneggia tutti i blocchi della struttura nel raggio di esplosione
+	var sm := GameManager.current_structure as StructureManager
+	if is_instance_valid(sm):
+		var snapshot: Array[DestructibleBlock] = sm.active_intact_blocks.duplicate()
+		for b in snapshot:
+			if not is_instance_valid(b) or b.is_destroyed:
+				continue
+			var dist: float = b.global_position.distance_to(origin)
+			if dist <= blast_radius:
+				var falloff: float = clampf(1.0 - (dist / (blast_radius * 1.15)), 0.45, 1.0)
+				var dir: Vector3 = (b.global_position - origin).normalized()
+				if dir.length_squared() < 0.001:
+					dir = Vector3.UP
+				b.take_damage(total_dmg * falloff, blast_penetration, b.global_position, dir)
 
-	var results := space_state.intersect_shape(query, 64)
-	for res in results:
-		var collider = res.collider
-		if collider is DestructibleBlock and is_instance_valid(collider):
-			var dist: float = global_position.distance_to(collider.global_position)
-			var falloff: float = clamp(1.0 - (dist / explosion_radius), 0.35, 1.0)
-			var dir: Vector3 = (collider.global_position - global_position).normalized()
-			if dir == Vector3.ZERO:
-				dir = Vector3.UP
-
-			# Esplosivo C4 ha durezza Tier 4
-			collider.take_damage(
-				explosion_damage * falloff,
-				4,
-				collider.global_position,
-				dir,
-				explosion_impulse
-			)
-		elif collider is RigidBody3D and is_instance_valid(collider):
-			var dir: Vector3 = (collider.global_position - global_position).normalized()
-			collider.apply_impulse(dir * explosion_impulse, collider.global_position - global_position)
-
-	# Effetto visivo particellare temporaneo
-	_spawn_explosion_vfx()
-
+	# Rimuovi la carica in sicurezza
 	queue_free()
 
-func _spawn_explosion_vfx() -> void:
-	# Flash luminoso istantaneo
-	var flash := OmniLight3D.new()
-	flash.light_color = Color(1.0, 0.6, 0.2)
-	flash.light_energy = 5.0
-	flash.omni_range = explosion_radius * 2.0
-	get_parent().add_child(flash)
-	flash.global_position = global_position
+func _spawn_explosion_vfx(origin: Vector3) -> void:
+	var root := get_tree().current_scene
+	if not root:
+		return
 
-	var tween: Tween = flash.create_tween()
-	tween.tween_property(flash, "light_energy", 0.0, 0.25)
-	tween.tween_callback(flash.queue_free)
+	var vfx_holder := Node3D.new()
+	root.add_child(vfx_holder)
+	vfx_holder.global_position = origin
+
+	# 1. Luce flash esplosiva
+	var flash := OmniLight3D.new()
+	flash.light_color = Color(1.0, 0.62, 0.18)
+	flash.light_energy = 12.0
+	flash.omni_range = blast_radius * 3.5
+	vfx_holder.add_child(flash)
+
+	# 2. Onda d'urto sferica in espansione
+	var wave := MeshInstance3D.new()
+	var smesh := SphereMesh.new()
+	smesh.radius = 0.5
+	smesh.height = 1.0
+	wave.mesh = smesh
+	var wmat := StandardMaterial3D.new()
+	wmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	wmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	wmat.albedo_color = Color(1.0, 0.58, 0.14, 0.72)
+	wave.material_override = wmat
+	vfx_holder.add_child(wave)
+
+	# 3. Particelle fuoco & fumo
+	var sparks := CPUParticles3D.new()
+	sparks.one_shot = true
+	sparks.explosiveness = 0.96
+	sparks.amount = 34
+	sparks.lifetime = 0.68
+	var pmesh := BoxMesh.new()
+	pmesh.size = Vector3(0.18, 0.18, 0.18)
+	sparks.mesh = pmesh
+	sparks.direction = Vector3.UP
+	sparks.spread = 180.0
+	sparks.initial_velocity_min = 4.5
+	sparks.initial_velocity_max = 11.5
+	sparks.gravity = Vector3(0, -8.5, 0)
+	var pmat := StandardMaterial3D.new()
+	pmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	pmat.albedo_color = Color(1.0, 0.45, 0.10)
+	sparks.material_override = pmat
+	vfx_holder.add_child(sparks)
+	sparks.emitting = true
+
+	var t := vfx_holder.create_tween()
+	t.tween_property(wave, "scale", Vector3.ONE * (blast_radius * 1.45), 0.24).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+	t.parallel().tween_property(wmat, "albedo_color:a", 0.0, 0.26)
+	t.parallel().tween_property(flash, "light_energy", 0.0, 0.30)
+	t.tween_interval(0.55)
+	t.tween_callback(func():
+		if is_instance_valid(vfx_holder):
+			vfx_holder.queue_free()
+	)

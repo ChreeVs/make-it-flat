@@ -1,11 +1,16 @@
-class_name MainGame
 extends Node3D
 
-@onready var structure_holder: Node3D = $StructureHolder
+@onready var structure_container: Node3D = $StructureHolder
 
 func _ready() -> void:
-	# Carica la prima commessa di default se non ancora attiva
-	if GameManager.current_contract == null:
-		var initial_contract: ContractData = load("res://data/contracts/tier1_shack.tres")
-		if initial_contract:
-			GameManager.load_contract(initial_contract)
+	GameManager.structure_container = structure_container
+	call_deferred("_load_initial_contract")
+
+func _load_initial_contract() -> void:
+	var start_path := "res://data/contracts/tier1_fence.tres"
+	if not ResourceLoader.exists(start_path):
+		start_path = "res://data/contracts/tier1_wall.tres"
+	if ResourceLoader.exists(start_path):
+		var contract: ContractData = load(start_path)
+		if contract:
+			GameManager.load_contract(contract)

@@ -1,111 +1,129 @@
 extends Node
 
-const SAVE_PATH: String = "user://save_v1.json"
-const SAVE_TMP_PATH: String = "user://save_v1.tmp"
+const SAVE_PATH := "user://save_v1.json"
+const AUTOSAVE_DELAY_SEC := 2.5
 
-var save_data: Dictionary = {
-	"version": 1,
-	"money": 0.0,
-	"scrap_materials": {},
-	"unlocked_tier": 1,
-	"unlocked_tools": ["crowbar"],
-	"equipped_tool": "crowbar",
-	"upgrade_levels": {},
-	"completed_contracts": [],
-	"prestige_count": 0,
-	"permanent_multiplier": 1.0,
-	"settings": {
-		"mouse_sensitivity": 0.002,
-		"master_volume": 1.0,
-		"sfx_volume": 1.0
-	}
-}
+var save_data: Dictionary = {}
+var _dirty: bool = false
+var _autosave_timer: float = 0.0
 
 func _ready() -> void:
+	save_data = _get_default_save()
 	load_game()
 
-func get_default_data() -> Dictionary:
+func _process(delta: float) -> void:
+	if _dirty:
+		_autosave_timer -= delta
+		if _autosave_timer <= 0.0:
+			_dirty = false
+			save_game()
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_APPLICATION_PAUSED:
+		if _dirty:
+			_dirty = false
+			save_game()
+
+func _get_default_save() -> Dictionary:
 	return {
 		"version": 1,
 		"money": 0.0,
-		"scrap_materials": {},
+		"total_earned": 0.0,
+		"prestige_count": 0,
+		"permanent_multiplier": 1.0,
 		"unlocked_tier": 1,
-		"unlocked_tools": ["crowbar"],
 		"equipped_tool": "crowbar",
-		"upgrade_levels": {
+		"unlocked_tools": ["crowbar"],
+		"completed_contracts": [],
+		"upgrades": {
 			"tool_damage": 0,
 			"attack_speed": 0,
 			"debris_value": 0,
 			"reach_distance": 0,
 			"player_speed": 0,
-			"auto_salvage": 0
+			"chain_bonus": 0,
+			"automation_drone": 0
 		},
-		"completed_contracts": [],
-		"prestige_count": 0,
-		"permanent_multiplier": 1.0,
-		"settings": {
-			"mouse_sensitivity": 0.002,
-			"master_volume": 1.0,
-			"sfx_volume": 1.0
+		"stats": {
+			"blocks_destroyed": 0,
+			"mass_demolished_kg": 0.0,
+			"contracts_completed": 0
 		}
 	}
 
-func load_game() -> bool:
+func mark_dirty() -> void:
+	_dirty = true
+	_autosave_timer = AUTOSAVE_DELAY_SEC
+
+func save_game() -> void:
+	# Normalizza eventuali chiavi StringName a String per JSON pulito
+	var clean_upgrades: Dictionary = {}
+	var raw_upgrades: Dictionary = save_data.get("upgrades", {})
+	for k in raw_upgrades.keys():
+		clean_upgrades[String(k)] = int(raw_upgrades[k])
+	save_data["upgrades"] = clean_upgrades
+
+	var clean_tools: Array = []
+	for t in save_data.get("unlocked_tools", ["crowbar"]):
+		var s: String = String(t)
+		if not clean_tools.has(s):
+			clean_tools.append(s)
+	save_data["unlocked_tools"] = clean_tools
+
+	var clean_contracts: Array = []
+	for c in save_data.get("completed_contracts", []):
+		var cs: String = String(c)
+		if not clean_contracts.has(cs):
+			clean_contracts.append(cs)
+	save_data["completed_contracts"] = clean_contracts
+	save_data["equipped_tool"] = String(save_data.get("equipped_tool", "crowbar"))
+
+	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	if file:
+		file.store_string(JSON.stringify(save_data, "\t"))
+		file.close()
+	else:
+		push_error("SaveManager: impossibile aprire file di salvataggio in scrittura.")
+
+func load_game() -> void:
+	var defaults := _get_default_save()
 	if not FileAccess.file_exists(SAVE_PATH):
-		save_data = get_default_data()
-		save_game()
-		return true
+		save_data = defaults
+		return
 
 	var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
 	if not file:
-		push_warning("Impossibile aprire il file di salvataggio: " + SAVE_PATH)
-		save_data = get_default_data()
-		return false
+		save_data = defaults
+		return
 
-	var json_str := file.get_as_text()
+	var content := file.get_as_text()
 	file.close()
 
-	var test_json_conv := JSON.new()
-	var parse_err := test_json_conv.parse(json_str)
-	if parse_err != OK:
-		push_error("Errore di parsing JSON nel file di salvataggio: %s (Linea %d)" % [test_json_conv.get_error_message(), test_json_conv.get_error_line()])
-		save_data = get_default_data()
-		return false
-
-	var loaded_dict: Variant = test_json_conv.data
-	if loaded_dict is Dictionary:
-		var default_data := get_default_data()
-		for key in default_data.keys():
-			if not loaded_dict.has(key):
-				loaded_dict[key] = default_data[key]
-		save_data = loaded_dict
-		return true
+	var parsed = JSON.parse_string(content)
+	if typeof(parsed) == TYPE_DICTIONARY:
+		save_data = _deep_merge(defaults, parsed)
+		# Rimuovi eventuali chiavi legacy obsolete come "auto_salvage"
+		var upg: Dictionary = save_data.get("upgrades", {})
+		if upg.has("auto_salvage"):
+			upg.erase("auto_salvage")
 	else:
-		save_data = get_default_data()
-		return false
+		push_warning("SaveManager: file salvataggio corrotto, ripristino predefiniti.")
+		save_data = defaults
 
-func save_game() -> bool:
-	var json_str := JSON.stringify(save_data, "\t")
-	var tmp_file := FileAccess.open(SAVE_TMP_PATH, FileAccess.WRITE)
-	if not tmp_file:
-		push_error("Impossibile creare il file temporaneo di salvataggio: " + SAVE_TMP_PATH)
-		return false
+func _deep_merge(base: Dictionary, override: Dictionary) -> Dictionary:
+	var result := base.duplicate(true)
+	for key in override.keys():
+		if result.has(key) and typeof(result[key]) == TYPE_DICTIONARY and typeof(override[key]) == TYPE_DICTIONARY:
+			result[key] = _deep_merge(result[key], override[key])
+		else:
+			result[key] = override[key]
+	return result
 
-	tmp_file.store_string(json_str)
-	tmp_file.flush()
-	tmp_file.close()
-
-	var dir := DirAccess.open("user://")
-	if dir:
-		if dir.file_exists(SAVE_PATH):
-			dir.remove(SAVE_PATH)
-		var rename_err := dir.rename(SAVE_TMP_PATH, SAVE_PATH)
-		if rename_err != OK:
-			push_error("Errore durante il salvataggio atomico: %d" % rename_err)
-			return false
-		return true
-	return false
-
-func reset_save() -> void:
-	save_data = get_default_data()
+func reset_save_for_prestige(new_prestige_count: int, new_multiplier: float) -> void:
+	var old_stats: Dictionary = save_data.get("stats", {}).duplicate(true)
+	save_data = _get_default_save()
+	save_data["prestige_count"] = new_prestige_count
+	save_data["permanent_multiplier"] = new_multiplier
+	save_data["stats"] = _deep_merge(save_data["stats"], old_stats)
+	_dirty = false
 	save_game()

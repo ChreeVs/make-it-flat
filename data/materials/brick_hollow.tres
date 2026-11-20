@@ -1,15 +1,22 @@
-[gd_resource type="Resource" script_class="MaterialData" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="MaterialData" load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/resources/MaterialData.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/textures/tex_mat_brick_hollow.png" id="2_albedo"]
+[ext_resource type="Texture2D" path="res://assets/textures/tex_mat_brick_hollow_n.png" id="3_normal"]
 
 [resource]
 script = ExtResource("1_script")
 material_id = &"brick_hollow"
-display_name = "Mattone Forato"
+display_name = "Forato Laterizio"
 hardness_tier = 2
-max_hp = 220.0
-mass_kg = 30.0
-base_money_value = 45.0
+max_hp = 135.0
+mass_kg = 40.0
+base_money_value = 34.0
 is_composite = false
-color = Color(0.85, 0.45, 0.20, 1.0)
-dust_color = Color(0.90, 0.55, 0.35, 1.0)
+color = Color(0.98, 0.96, 0.94, 1.0)
+dust_color = Color(0.78, 0.44, 0.28, 1.0)
+albedo_texture = ExtResource("2_albedo")
+normal_texture = ExtResource("3_normal")
+roughness = 0.84
+metallic = 0.0
+uv_scale = Vector3(1.0, 1.0, 1.0)
