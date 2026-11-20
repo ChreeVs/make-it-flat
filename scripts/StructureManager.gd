@@ -1,7 +1,7 @@
 class_name StructureManager
 extends Node3D
 
-@export var block_size: float = 1.0
+@export var block_size: float = 0.5
 
 var all_blocks: Array[DestructibleBlock] = []
 var active_intact_blocks: Array[DestructibleBlock] = []
@@ -148,15 +148,13 @@ func _emit_progress() -> void:
 	var ratio: float = clampf(destroyed_mass / maxf(total_initial_mass, 1.0), 0.0, 1.0)
 	EventBus.contract_progress_updated.emit(ratio, destroyed_mass, total_initial_mass)
 
-	var threshold: float = GameManager.current_contract.completion_threshold if GameManager.current_contract else 0.88
+	var threshold: float = GameManager.current_contract.completion_threshold if GameManager.current_contract else 0.75
 	if not threshold_reached and ratio >= threshold:
 		threshold_reached = true
 		_enable_xray_on_remaining()
 		EventBus.contract_threshold_reached.emit(GameManager.current_contract)
-
-	# Auto-completa solo quando la struttura è praticamente rasa al suolo al 100%
-	if ratio >= 0.995 and GameManager.current_contract and not GameManager.contract_bonus_claimed:
-		GameManager.complete_current_contract()
+		if GameManager.current_contract and not GameManager.contract_bonus_claimed:
+			GameManager.complete_current_contract()
 
 func _enable_xray_on_remaining() -> void:
 	if xray_active:

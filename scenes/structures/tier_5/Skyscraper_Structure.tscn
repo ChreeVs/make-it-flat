@@ -4,6 +4,7 @@
 
 [node name="Skyscraper_Structure" type="Node3D"]
 script = ExtResource("1_tower")
-tower_width = 6
-tower_depth = 6
-tower_height = 8
+tower_width = 14
+tower_depth = 14
+tower_height = 28
+spire_height = 8

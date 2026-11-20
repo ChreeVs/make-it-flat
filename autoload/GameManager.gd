@@ -2,6 +2,14 @@ extends Node
 
 const PLAYER_SAFE_SPAWN := Vector3(0.0, 1.0, 9.5)
 
+const CONTRACT_SEQUENCE: Array[String] = [
+	"res://data/contracts/tier1_villa.tres",
+	"res://data/contracts/tier2_warehouse.tres",
+	"res://data/contracts/tier3_condominium.tres",
+	"res://data/contracts/tier4_industrial.tres",
+	"res://data/contracts/tier5_skyscraper.tres"
+]
+
 var current_contract: ContractData = null
 var current_structure: Node3D = null
 var structure_container: Node3D = null
@@ -12,8 +20,22 @@ var contract_bonus_claimed: bool = false
 
 var placed_explosives: Array[Node3D] = []
 
+# Avanzamento automatico al livello successivo
+const AUTO_ADVANCE_DELAY: float = 3.5
+var auto_advance_timer: float = -1.0
+var next_contract_to_load: ContractData = null
+
 func _ready() -> void:
 	EventBus.contract_selected.connect(_on_contract_selected)
+
+func _process(delta: float) -> void:
+	if auto_advance_timer > 0.0:
+		auto_advance_timer -= delta
+		var next_name: String = next_contract_to_load.title if next_contract_to_load else "Prossimo cantiere"
+		EventBus.level_completed_countdown.emit(maxf(auto_advance_timer, 0.0), next_name)
+		if auto_advance_timer <= 0.0:
+			auto_advance_timer = -1.0
+			advance_to_next_contract()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
@@ -38,11 +60,14 @@ func _on_contract_selected(contract: ContractData) -> void:
 func load_contract(contract: ContractData) -> void:
 	if not contract:
 		return
+
+	auto_advance_timer = -1.0
 	current_contract = contract
 	contract_bonus_claimed = false
 
-	# Pulisci eventuali cariche C4 rimaste dal cantiere precedente
+	# Pulisci macerie precedenti e cariche C4 rimaste
 	clear_explosives()
+	DebrisPool.clear_all()
 
 	# Rimuovi vecchia struttura in modo pulito
 	if is_instance_valid(current_structure):
@@ -119,6 +144,40 @@ func complete_current_contract() -> void:
 
 	SaveManager.save_game()
 	EventBus.contract_completed.emit(current_contract)
+
+	# Calcola il prossimo contratto nella sequenza logica
+	_prepare_next_level_transition()
+
+func _prepare_next_level_transition() -> void:
+	var cur_path: String = current_contract.resource_path if current_contract else ""
+	var cur_idx: int = CONTRACT_SEQUENCE.find(cur_path)
+
+	var next_idx: int = 0
+	if cur_idx != -1:
+		next_idx = (cur_idx + 1) % CONTRACT_SEQUENCE.size()
+	else:
+		# Ricerca alternativa per tier
+		var t: int = current_contract.tier if current_contract else 1
+		next_idx = clampi(t, 0, CONTRACT_SEQUENCE.size() - 1)
+
+	var next_path: String = CONTRACT_SEQUENCE[next_idx]
+	if ResourceLoader.exists(next_path):
+		next_contract_to_load = load(next_path) as ContractData
+
+	auto_advance_timer = AUTO_ADVANCE_DELAY
+	var next_name: String = next_contract_to_load.title if next_contract_to_load else "Prossimo Livello"
+	EventBus.level_completed_countdown.emit(AUTO_ADVANCE_DELAY, next_name)
+
+func advance_to_next_contract() -> void:
+	auto_advance_timer = -1.0
+	if next_contract_to_load:
+		var target: ContractData = next_contract_to_load
+		next_contract_to_load = null
+		load_contract(target)
+	elif not CONTRACT_SEQUENCE.is_empty():
+		var first: ContractData = load(CONTRACT_SEQUENCE[0]) as ContractData
+		if first:
+			load_contract(first)
 
 func register_explosive(charge: Node3D) -> void:
 	_prune_explosives()

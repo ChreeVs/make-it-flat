@@ -1,0 +1,10 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/CondominiumBuilder.gd" id="1_condo"]
+
+[node name="Condominium_Structure" type="Node3D"]
+script = ExtResource("1_condo")
+building_width = 16
+building_depth = 12
+floors = 4
+floor_height = 4

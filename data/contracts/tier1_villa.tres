@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ContractData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ContractData.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://scenes/structures/tier_1/Villa_Structure.tscn" id="2_scene"]
+
+[resource]
+script = ExtResource("1_script")
+contract_id = &"tier1_villa"
+tier = 1
+title = "Villa Residenziale con Tetto a Falde"
+description = "Villa unifamiliare con portico d'ingresso, stanze interne, solaio in legno e tetto a spiovente con comignolo in mattoni. Abbatti il tetto e demolisci le pareti per completare il lotto."
+structure_scene = ExtResource("2_scene")
+completion_threshold = 0.75
+completion_bonus = 500.0
+required_capital = 0.0

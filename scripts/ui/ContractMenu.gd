@@ -69,13 +69,14 @@ func _init_styles() -> void:
 func _load_contracts() -> void:
 	contracts_data.clear()
 	var paths := [
-		"res://data/contracts/tier1_fence.tres",
+		"res://data/contracts/tier1_villa.tres",
+		"res://data/contracts/tier2_warehouse.tres",
+		"res://data/contracts/tier3_condominium.tres",
+		"res://data/contracts/tier4_industrial.tres",
+		"res://data/contracts/tier5_skyscraper.tres",
 		"res://data/contracts/tier1_shack.tres",
-		"res://data/contracts/tier1_wall.tres",
-		"res://data/contracts/tier2_garage.tres",
-		"res://data/contracts/tier3_palazzina.tres",
-		"res://data/contracts/tier4_warehouse.tres",
-		"res://data/contracts/tier5_skyscraper.tres"
+		"res://data/contracts/tier1_fence.tres",
+		"res://data/contracts/tier2_garage.tres"
 	]
 	for p in paths:
 		if ResourceLoader.exists(p):

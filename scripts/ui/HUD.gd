@@ -4,6 +4,7 @@ extends Control
 @onready var money_label: Label = $TopLeft/MoneyPanel/VBox/MoneyLabel
 @onready var tier_label: Label = $TopLeft/MoneyPanel/VBox/MetaRow/TierLabel
 @onready var prestige_badge: Label = $TopLeft/MoneyPanel/VBox/MetaRow/PrestigeBadge
+@onready var stance_badge: Label = $TopLeft/MoneyPanel/VBox/MetaRow/StanceBadge
 @onready var c4_badge: Label = $TopLeft/MoneyPanel/VBox/C4Badge
 
 @onready var contract_title_label: Label = $TopCenter/ProgressPanel/ProgressContainer/ContractTitle
@@ -12,6 +13,7 @@ extends Control
 
 @onready var completion_banner: PanelContainer = $CenterNotification/CompletionBanner
 @onready var completion_label: Label = $CenterNotification/CompletionBanner/VBox/CompletionText
+@onready var countdown_label: Label = $CenterNotification/CompletionBanner/VBox/CountdownText
 @onready var notification_label: Label = $TopNotification/NotificationLabel
 
 @onready var target_inspector: PanelContainer = $TargetInspector
@@ -67,6 +69,8 @@ func _ready() -> void:
 	EventBus.target_block_hovered.connect(_on_target_block_hovered)
 	EventBus.block_damaged.connect(_on_block_damaged_feedback)
 	EventBus.explosives_count_changed.connect(_on_explosives_count_changed)
+	EventBus.level_completed_countdown.connect(_on_level_completed_countdown)
+	EventBus.player_stance_changed.connect(_on_player_stance_changed)
 
 	_update_money_display(EconomyManager.current_money)
 	_update_meta_badges()
@@ -169,6 +173,13 @@ func _process(_delta: float) -> void:
 	if GameManager.is_shop_open or GameManager.is_contract_menu_open:
 		return
 
+	# Se il cantiere è stato completato e c'è il countdown, premi Spazio o E per avanzare subito
+	if GameManager.auto_advance_timer > 0.0:
+		if Input.is_action_just_pressed("jump") or Input.is_action_just_pressed("interact"):
+			GameManager.advance_to_next_contract()
+			completion_banner.visible = false
+			return
+
 	if current_completion_available and Input.is_action_just_pressed("interact"):
 		GameManager.complete_current_contract()
 		current_completion_available = false
@@ -211,6 +222,16 @@ func _update_meta_badges() -> void:
 	else:
 		prestige_badge.visible = false
 
+func _on_player_stance_changed(is_crouching: bool) -> void:
+	if not stance_badge:
+		return
+	if is_crouching:
+		stance_badge.text = "• ACCOVACCIATO"
+		stance_badge.add_theme_color_override("font_color", Color(1.0, 0.78, 0.28))
+	else:
+		stance_badge.text = "• IN PIEDI"
+		stance_badge.add_theme_color_override("font_color", Color(0.55, 0.82, 1.0))
+
 func _update_contract_header() -> void:
 	if GameManager.current_contract:
 		contract_title_label.text = "TIER %d  —  %s" % [GameManager.current_contract.tier, GameManager.current_contract.title.to_upper()]
@@ -225,22 +246,24 @@ func _on_contract_selected(_contract: ContractData) -> void:
 func _on_progress_updated(ratio: float, destroyed_mass: float, total_mass: float) -> void:
 	var percent: float = ratio * 100.0
 	progress_bar.value = percent
-	var thresh_pct: int = int(round((GameManager.current_contract.completion_threshold if GameManager.current_contract else 0.88) * 100.0))
+	var thresh_pct: int = int(round((GameManager.current_contract.completion_threshold if GameManager.current_contract else 0.75) * 100.0))
 	progress_label.text = "Demolizione: %.1f%%  (%.0f / %.0f kg)  •  Soglia %d%%" % [percent, destroyed_mass, total_mass, thresh_pct]
 	_update_contract_header()
 
 func _on_contract_threshold_reached(contract: ContractData) -> void:
-	if GameManager.contract_bonus_claimed:
-		return
-	current_completion_available = true
+	current_completion_available = false
 	completion_banner.visible = true
-	var base_bonus: float = contract.completion_bonus if contract else 150.0
+	var base_bonus: float = contract.completion_bonus if contract else 500.0
 	var final_bonus: float = base_bonus * EconomyManager.permanent_multiplier
-	completion_label.text = "SOGLIA RAGGIUNTA! Premi [E] per Incassare %s (o demolisci il resto)" % _format_euros(final_bonus)
+	completion_label.text = "🎉 SOGLIA RAGGIUNTA! Premio: +%s" % _format_euros(final_bonus)
+
+func _on_level_completed_countdown(seconds_left: float, next_contract_name: String) -> void:
+	completion_banner.visible = true
+	var bonus: float = (GameManager.current_contract.completion_bonus if GameManager.current_contract else 500.0) * EconomyManager.permanent_multiplier
+	completion_label.text = "🎉 CANTIERE DEMOLITO! +%s" % _format_euros(bonus)
+	countdown_label.text = "Prossimo: %s tra %.1fs... [Premi SPAZIO per avanzare subito]" % [next_contract_name, seconds_left]
 
 func _on_contract_completed(_contract: ContractData) -> void:
-	completion_banner.visible = false
-	current_completion_available = false
 	_update_meta_badges()
 
 func _on_tool_equipped(_tool: ToolData) -> void:

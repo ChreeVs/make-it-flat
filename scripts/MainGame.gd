@@ -7,9 +7,9 @@ func _ready() -> void:
 	call_deferred("_load_initial_contract")
 
 func _load_initial_contract() -> void:
-	var start_path := "res://data/contracts/tier1_fence.tres"
+	var start_path := "res://data/contracts/tier1_villa.tres"
 	if not ResourceLoader.exists(start_path):
-		start_path = "res://data/contracts/tier1_wall.tres"
+		start_path = "res://data/contracts/tier1_shack.tres"
 	if ResourceLoader.exists(start_path):
 		var contract: ContractData = load(start_path)
 		if contract:

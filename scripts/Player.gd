@@ -2,11 +2,21 @@ class_name Player
 extends CharacterBody3D
 
 @export var base_walk_speed: float = 5.4
-@export var base_sprint_speed: float = 8.4
-@export var base_jump_velocity: float = 5.2
+@export var base_sprint_speed: float = 8.6
+@export var base_crouch_speed: float = 2.5
+@export var base_jump_velocity: float = 5.8
 @export var mouse_sensitivity: float = 0.0024
 @export var base_fov: float = 78.0
 @export var sprint_fov: float = 84.0
+
+const NORMAL_HEIGHT: float = 1.8
+const CROUCH_HEIGHT: float = 1.0
+const NORMAL_HEAD_Y: float = 1.62
+const CROUCH_HEAD_Y: float = 0.85
+
+var is_crouching: bool = false
+var current_crouch_ratio: float = 0.0
+var _capsule_shape: CapsuleShape3D = null
 
 const COYOTE_TIME_SEC: float = 0.12
 const JUMP_BUFFER_SEC: float = 0.10
@@ -41,8 +51,13 @@ const TOOL_MODEL_PATHS: Dictionary = {
 @onready var camera: Camera3D = $Head/Camera3D
 @onready var interaction_ray: RayCast3D = $Head/Camera3D/RayCast3D
 @onready var tool_pivot: Node3D = $Head/Camera3D/ToolPivot
+@onready var collision_shape: CollisionShape3D = $CollisionShape3D
 
 func _ready() -> void:
+	if collision_shape and collision_shape.shape is CapsuleShape3D:
+		_capsule_shape = collision_shape.shape.duplicate() as CapsuleShape3D
+		collision_shape.shape = _capsule_shape
+
 	_tool_pivot_base_pos = tool_pivot.position
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
@@ -57,7 +72,13 @@ func _ready() -> void:
 	if initial_tool:
 		_apply_tool(initial_tool)
 
-func _unhandled_input(event: InputEvent) -> void:
+func _input(event: InputEvent) -> void:
+	# Cliccando nella finestra con i menu chiusi, cattura subito il cursore per visuale libera
+	if event is InputEventMouseButton and event.pressed:
+		if not GameManager.is_shop_open and not GameManager.is_contract_menu_open:
+			if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+				Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
 	if GameManager.is_shop_open or GameManager.is_contract_menu_open:
 		return
 
@@ -160,6 +181,19 @@ func _physics_process(delta: float) -> void:
 		move_and_slide()
 		return
 
+	# Gestione Crouch (Ctrl o C)
+	var prev_crouching: bool = is_crouching
+	is_crouching = Input.is_action_pressed("crouch") and not GameManager.is_shop_open and not GameManager.is_contract_menu_open
+	if is_crouching != prev_crouching:
+		EventBus.player_stance_changed.emit(is_crouching)
+
+	current_crouch_ratio = lerpf(current_crouch_ratio, 1.0 if is_crouching else 0.0, 14.0 * delta)
+	head.position.y = lerpf(NORMAL_HEAD_Y, CROUCH_HEAD_Y, current_crouch_ratio)
+	if _capsule_shape:
+		var target_h: float = lerpf(NORMAL_HEIGHT, CROUCH_HEIGHT, current_crouch_ratio)
+		_capsule_shape.height = target_h
+		collision_shape.position.y = target_h * 0.5
+
 	# Movimento con upgrade player_speed, Coyote Time e Jump Buffer
 	var speed_mult: float = EconomyManager.get_upgrade_total_multiplier(&"player_speed")
 	if is_on_floor():
@@ -178,10 +212,21 @@ func _physics_process(delta: float) -> void:
 		_coyote_timer = 0.0
 		_jump_buffer_timer = 0.0
 
+	# Taglio variabile del salto per massimo controllo
+	if Input.is_action_just_released("jump") and velocity.y > 1.8:
+		velocity.y *= 0.52
+
 	var input_dir: Vector2 = Input.get_vector("move_left", "move_right", "move_forward", "move_backward")
 	var direction: Vector3 = (transform.basis * Vector3(input_dir.x, 0.0, input_dir.y)).normalized()
-	var is_sprinting: bool = Input.is_action_pressed("sprint") and direction.length_squared() > 0.01
-	var target_speed: float = (base_sprint_speed if is_sprinting else base_walk_speed) * speed_mult
+	var is_sprinting: bool = Input.is_action_pressed("sprint") and direction.length_squared() > 0.01 and not is_crouching
+
+	var target_speed: float
+	if is_crouching:
+		target_speed = base_crouch_speed * speed_mult
+	elif is_sprinting:
+		target_speed = base_sprint_speed * speed_mult
+	else:
+		target_speed = base_walk_speed * speed_mult
 
 	if direction.length_squared() > 0.001:
 		velocity.x = lerpf(velocity.x, direction.x * target_speed, 14.0 * delta)

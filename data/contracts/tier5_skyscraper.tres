@@ -7,9 +7,9 @@
 script = ExtResource("1_script")
 contract_id = &"tier5_skyscraper"
 tier = 5
-title = "Megastruttura: Grattacielo Skyline"
-description = "L'apice della carriera da demolitore. Abbatti la megastruttura per sbloccare la vendita dell'impresa ed eseguire il Prestigio!"
+title = "Grattacielo Direzionale & Eliporto"
+description = "Imponente torre direzionale con atrio a doppia altezza, 8 mega-colonne d'acciaio, core ascensori corazzato, penthouse sommitale ed eliporto con antenna. La sfida definitiva di demolizione controllata!"
 structure_scene = ExtResource("2_scene")
-completion_threshold = 0.88
-completion_bonus = 25000.0
+completion_threshold = 0.75
+completion_bonus = 65000.0
 required_capital = 0.0

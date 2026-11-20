@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ContractData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ContractData.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://scenes/structures/tier_3/Condominium_Structure.tscn" id="2_scene"]
+
+[resource]
+script = ExtResource("1_script")
+contract_id = &"tier3_condominium"
+tier = 3
+title = "Palazzina Condominiale 4 Piani"
+description = "Condominio residenziale di 4 piani con balconi esterni, atrio, solai in cemento armato e vano ascensore centrale. Fai saltare i pilastri del piano terra per un crollo strutturale perfetto!"
+structure_scene = ExtResource("2_scene")
+completion_threshold = 0.75
+completion_bonus = 5500.0
+required_capital = 0.0

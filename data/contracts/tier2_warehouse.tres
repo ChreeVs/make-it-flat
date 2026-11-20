@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ContractData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ContractData.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://scenes/structures/tier_2/Warehouse_Structure.tscn" id="2_scene"]
+
+[resource]
+script = ExtResource("1_script")
+contract_id = &"tier2_warehouse"
+tier = 2
+title = "Capannone Logistico e Silo"
+description = "Grande capannone industriale con massicci pilastri d'acciaio, baia di carico camion, travi reticolari del tetto e silo di stoccaggio annesso. Usa la mazza pesante o esplosivi per abbattere i piloni d'angolo."
+structure_scene = ExtResource("2_scene")
+completion_threshold = 0.75
+completion_bonus = 1600.0
+required_capital = 0.0

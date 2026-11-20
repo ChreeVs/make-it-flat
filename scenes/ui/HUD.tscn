@@ -146,6 +146,13 @@ theme_override_colors/font_color = Color(0.45, 0.85, 1, 1)
 theme_override_font_sizes/font_size = 12
 text = "PRESTIGIO x1.0"
 
+[node name="StanceBadge" type="Label" parent="TopLeft/MoneyPanel/VBox/MetaRow"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.55, 0.82, 1, 1)
+theme_override_font_sizes/font_size = 12
+text = "• IN PIEDI"
+
 [node name="C4Badge" type="Label" parent="TopLeft/MoneyPanel/VBox"]
 visible = false
 layout_mode = 2
@@ -241,7 +248,7 @@ grow_vertical = 2
 mouse_filter = 2
 
 [node name="CompletionBanner" type="PanelContainer" parent="CenterNotification"]
-custom_minimum_size = Vector2(540, 56)
+custom_minimum_size = Vector2(580, 68)
 layout_mode = 2
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBox_Banner")
@@ -249,14 +256,23 @@ theme_override_styles/panel = SubResource("StyleBox_Banner")
 [node name="VBox" type="VBoxContainer" parent="CenterNotification/CompletionBanner"]
 layout_mode = 2
 mouse_filter = 2
+theme_override_constants/separation = 4
 alignment = 1
 
 [node name="CompletionText" type="Label" parent="CenterNotification/CompletionBanner/VBox"]
 layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.32, 1, 0.52, 1)
-theme_override_font_sizes/font_size = 16
-text = "SOGLIA RAGGIUNTA! Premi [E] per incassare il Bonus"
+theme_override_font_sizes/font_size = 17
+text = "🎉 CANTIERE DEMOLITO CON SUCCESSO!"
+horizontal_alignment = 1
+
+[node name="CountdownText" type="Label" parent="CenterNotification/CompletionBanner/VBox"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(1, 0.88, 0.35, 1)
+theme_override_font_sizes/font_size = 13
+text = "Prossimo cantiere tra 3.5s... [Premi SPAZIO per avanzare subito]"
 horizontal_alignment = 1
 
 [node name="TargetInspector" type="PanelContainer" parent="."]
@@ -402,7 +418,7 @@ theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.8)
 theme_override_constants/shadow_offset_x = 1
 theme_override_constants/shadow_offset_y = 1
 theme_override_font_sizes/font_size = 12
-text = "[LMB] Demolisci  •  [1-7 / Rotella] Attrezzi  •  [B] Officina  •  [C] Commesse  •  [R] Reset  •  [ESC] Cursore"
+text = "[WASD] Muoviti  •  [SPAZIO] Salto  •  [CTRL/C] Accovacciati  •  [LMB] Demolisci  •  [1-7] Attrezzi  •  [B] Officina  •  [N] Contratti  •  [R] Reset"
 
 [node name="Crosshair" type="Control" parent="."]
 layout_mode = 1
